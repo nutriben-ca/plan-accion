@@ -83,6 +83,14 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .p-seg{background:#e6eef9;color:var(--azul)}
 .p-emc{background:#f0edf9;color:#4a3f8f}
 .p-pat{background:#fff4e6;color:#8a5200}
+.pat-box{display:flex;gap:12px;align-items:flex-start}
+.pat-badge{flex:0 0 auto;padding:6px 11px;border-radius:7px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pat-v{background:#e8f5ee;color:#1d6b43}.pat-o{background:#fff4e6;color:#8a5200}.pat-r{background:#fdecec;color:#a3262a}
+.pat-txt{font-size:12px;color:var(--t2);line-height:1.6}
+.pat-txt b{color:var(--t1)}
+.pat-mk{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.pat-mk span{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--bg);border:1px solid var(--ln);color:var(--t2)}
+.pat-acc{margin-top:9px;font-size:11.5px;color:var(--t2);background:var(--bg);border-left:3px solid var(--azul);padding:7px 10px;border-radius:0 6px 6px 0;line-height:1.55}
 .p-nb{background:var(--ok-bg);color:var(--ok)}
 .p-new{background:var(--azul);color:#fff}
 
@@ -549,6 +557,36 @@ function analizar(d){
     calidad:d.calidad||0};
 }
 
+/* ── Patrón de comportamiento (relación con patrocinios de la competencia) ──
+   Edita aquí el significado y la acción sugerida de cada patrón. */
+var PATRONES={
+  'Terreno virgen':{c:'pat-v',q:'No tiene historial registrado con patrocinios de la competencia.',
+    a:'Ventana abierta: el primer vínculo de inversión lo puede construir Nutribén. Priorizar contenido científico propio antes que la competencia llegue.'},
+  'Activo reciente':{c:'pat-o',q:'Empezó a participar recientemente en actividades patrocinadas por la competencia.',
+    a:'La competencia lo está trabajando ahora. Conviene entrar pronto con un diferencial claro (α-lactoalbúmina, sin aceite de palma) antes de que la relación se consolide.'},
+  'Abandono reciente':{c:'pat-o',q:'Dejó de participar recientemente con la competencia.',
+    a:'Antes de invertir, identificar por qué se alejó (insatisfacción, cambio de práctica, otra marca). Si la causa es la marca, es una oportunidad real.'},
+  'Abandono temprano':{c:'pat-o',q:'Participó poco con la competencia y no continuó.',
+    a:'Relación débil con la competencia. Explorar qué espera de una marca y ofrecer una experiencia distinta a la que no le funcionó.'},
+  'Patrón intermitente':{c:'pat-o',q:'Participa de forma irregular, entrando y saliendo de actividades patrocinadas.',
+    a:'Establecer una pauta de visita regular. La constancia de Nutribén puede ser lo que estabilice su prescripción.'},
+  'Lealtad fraccionada':{c:'pat-o',q:'Reparte su participación entre varias marcas de la competencia.',
+    a:'No es fiel a nadie: hay espacio para ganar una porción. Competir por la categoría donde está su hueco, no por todo el portafolio.'},
+  'Lealtad consolidada':{c:'pat-r',q:'Concentra su participación de forma sostenida en una marca de la competencia.',
+    a:'Alto costo de conversión. No se sugiere patrocinio ni mesa salvo que Close Up ya muestre prescripción Nutribén; mantener visita y evidencia.'}
+};
+function bloquePatron(d){
+  var P=PATRONES[d.patron]||{c:'pat-o',q:'Patrón sin descripción registrada.',a:''};
+  var mk=(d.marcas&&d.marcas!=='—')?d.marcas.split(',').map(function(x){return '<span>'+esc(x.trim())+'</span>';}).join(''):'';
+  return '<div class="diag"><h3>PATR&Oacute;N DE COMPORTAMIENTO</h3><div class="pat-box">'
+    +'<span class="pat-badge '+P.c+'">'+esc(d.patron||'Sin patrón')+'</span>'
+    +'<div><div class="pat-txt">'+P.q
+      +(d.sin_datos?' <b>Ojo:</b> este m&eacute;dico no tiene encuesta, as&iacute; que el patr&oacute;n puede no estar confirmado.':'')+'</div>'
+    +(mk?'<div class="pat-mk">'+mk+'</div>':'')
+    +(P.a?'<div class="pat-acc"><b>C&oacute;mo abordarlo:</b> '+P.a+'</div>':'')
+    +'</div></div></div>';
+}
+
 /* ── Plan sugerido según tier, segmento y patrón ───────────── */
 function sugerir(d){
   var a=analizar(d),s={};
@@ -739,6 +777,8 @@ function renderDetalle(){
    +(d.fuera_maestro?'<span class="pill" style="background:#f0edf9;color:#4a3f8f">Fuera del CRM</span>':'')
    +(d.adhoc?'<span class="pill" style="background:#e8f0fd;color:#1552b8">'+esc(d.adhoc)+'</span>':'')
    +'</div></div></div>'
+
+   +bloquePatron(d)
 
    +'<div class="diag"><h3>MEZCLA DE PRESCRIPCI&Oacute;N SEMANAL</h3>'
    +'<div class="mix">'+mixH+'</div>'
