@@ -987,7 +987,7 @@ function pedirSolPuntual(i){
   var c=CATSOL.filter(function(z){return z.k===x.cat;})[0],ref=solPuntualRef(x);
   SOLPRE[ref]={tipo:'medicos',sub:'puntual',title:(x.concepto+' — '+cur.n).slice(0,120),
     just:'Plan de Acción. Solicitud puntual'+(c?' ('+c.n+')':'')+' para '+cur.n+'.'+(DRAFT.objetivo?' Objetivo con el médico: '+DRAFT.objetivo+'.':''),
-    ben:cur.n+(cur.esp?' ('+cur.esp+')':''),date:x.fecha||'',usd:num(x.monto)};
+    ben:cur.n+(cur.esp?' ('+cur.esp+')':''),date:x.fecha||'',usd:num(x.monto),pais:cur.pais||paisMR(cur.mr),mr:cur.mr};
   pedirSol(ref);
 }
 function actualizarTotalSol(){
@@ -2597,17 +2597,18 @@ function pedirSol(ref){
   var b64=btoa(unescape(encodeURIComponent(js))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   window.open(GASTOS_URL+'#sol='+b64,'_blank','noopener');
 }
+function paisMR(mr){var x=DATA.filter(function(z){return z.mr===mr&&z.pais;})[0];return x?x.pais:'';}
 function solTac(id,d,st){
   var obj=(DRAFT&&DRAFT.objetivo)?DRAFT.objetivo+'. ':'';
   if(id==='oneone')return solBar('oneone:'+key(d),{tipo:'medicos',sub:'oneone',
     title:('One to one'+(st.tema?': '+st.tema:'')+' — '+d.n).slice(0,120),
     just:'Plan de Acción. '+obj+(st.tema?'Tema: '+st.tema+'. ':'')+'Sesión individual de actualización con '+d.n+'.',
-    ben:d.n+(d.esp?' ('+d.esp+')':''),date:st.fecha||'',usd:num(st.monto)});
+    ben:d.n+(d.esp?' ('+d.esp+')':''),date:st.fecha||'',usd:num(st.monto),pais:d.pais||paisMR(d.mr),mr:d.mr});
   var ev=eventoDe(st),nom=ev?ev.nombre:(st.evento||st.evento_txt||'evento');
   return solBar('patrocinio:'+key(d),{tipo:'medicos',sub:'patrocinio',
     title:('Patrocinio: '+nom+' — '+d.n).slice(0,120),
     just:'Plan de Acción. '+obj+'Patrocinio de '+d.n+' a '+nom+'.',
-    ben:d.n+(d.esp?' ('+d.esp+')':''),date:fechaPat(st)||'',usd:num(st.monto)});
+    ben:d.n+(d.esp?' ('+d.esp+')':''),date:fechaPat(st)||'',usd:num(st.monto),pais:d.pais||paisMR(d.mr),mr:d.mr});
 }
 function solMesa(m,inv){
   var nombres=inv.map(function(d){return d.n;});
@@ -2615,7 +2616,7 @@ function solMesa(m,inv){
   return solBar('mesa:'+m.id,{tipo:'medicos',sub:'mesa',
     title:('Mesa redonda: '+(m.tema||'sin tema')).slice(0,120),
     just:'Plan de Acción. Mesa redonda'+(m.sede?' en '+m.sede:'')+' con '+inv.length+' médico(s).'+(m.notas?' '+m.notas:''),
-    ben:ben,date:m.fecha||'',usd:num(m.monto)});
+    ben:ben,date:m.fecha||'',usd:num(m.monto),pais:paisMR(m.mr)||(inv[0]&&inv[0].pais)||'',mr:m.mr||(inv[0]&&inv[0].mr)||''});
 }
 
 function cargarTodo(){
