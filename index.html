@@ -326,9 +326,38 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .otab .tl{max-width:320px;color:var(--t2)}.otab tr.gr td{background:var(--bg);font-size:9.5px;font-weight:700;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;padding:7px 12px}
 .sfc{color:#8a6000!important;background:#fffbef}
 @media(max-width:620px){.pcards{grid-template-columns:repeat(2,1fr)}.grp{top:0}}
+/* Login y vínculo con solicitudes de gastos */
+#login{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,#0033A1,#00A0DF);display:flex;align-items:center;justify-content:center;padding:16px}
+#login form{background:#fff;border-radius:14px;padding:26px 22px;width:100%;max-width:360px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+#login h2{margin:10px 0 2px;font-size:19px;color:#0033A1}
+#login p{margin:0 0 16px;font-size:12.5px;color:#5a6478}
+#login label{display:block;font-size:11px;font-weight:700;color:#5a6478;margin:10px 0 4px;text-transform:uppercase}
+#login input{width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #d6dcea;border-radius:8px;font-size:15px}
+#login button{width:100%;margin-top:16px;padding:12px;border:none;border-radius:8px;background:#0033A1;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+#login button:disabled{opacity:.6}
+#lg-err{display:none;margin-top:12px;padding:9px 11px;border-radius:8px;background:#fdecec;color:#a31919;font-size:12.5px}
+#login small{display:block;margin-top:14px;font-size:11.5px;color:#5a6478;text-align:center}
+.who{font-size:11px;opacity:.9;margin-top:4px}
+.who a{color:inherit;text-decoration:underline;cursor:pointer;margin-left:6px}
+.solbar{margin-top:10px;padding:10px 12px;border-radius:8px;background:#f3f6fd;border:1px dashed #b9c6e6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.solbar .st{font-weight:700;padding:2px 8px;border-radius:10px;background:#e3e9f7;color:#2a3a66}
+.solbar .st.ok{background:#dcf5e3;color:#166534}.solbar .st.no{background:#fde2e2;color:#991b1b}.solbar .st.wait{background:#fff3cd;color:#8a6000}
+.solbar .sp{flex:1}
 </style>
 </head>
 <body>
+<div id="login" style="display:none">
+  <form onsubmit="entrar(event)" autocomplete="on">
+    <div class="logo" style="width:44px;height:44px;border-radius:10px;background:#0033A1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800">NB</div>
+    <h2>Plan de Acci&oacute;n</h2>
+    <p>Ingresa con tu cuenta de la app de gastos (mismo correo y contrase&ntilde;a).</p>
+    <label for="lg-em">Correo</label><input id="lg-em" type="email" autocomplete="username" required>
+    <label for="lg-pw">Contrase&ntilde;a</label><input id="lg-pw" type="password" autocomplete="current-password" required>
+    <button id="lg-btn" type="submit">Ingresar</button>
+    <div id="lg-err"></div>
+    <small>&iquest;Olvidaste tu contrase&ntilde;a? Recup&eacute;rala en la <a href="https://nutriben-ca.github.io/gastos/" target="_blank" rel="noopener">app de gastos</a>.</small>
+  </form>
+</div>
 
 <div class="hdr">
   <div class="hb">
@@ -342,7 +371,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
     <div><div class="n" id="k-tot">—</div><div class="l">m&eacute;dicos en cartera</div></div>
     <div><div class="n" id="k-pl">—</div><div class="l">con plan guardado</div></div>
     <div><div class="n" id="k-inv">—</div><div class="l">inversi&oacute;n planificada</div></div>
-    <div style="text-align:right"><span class="sync wait" id="sync">Conectando…</span></div>
+    <div style="text-align:right"><span class="sync wait" id="sync">Conectando…</span><div class="who" id="who"></div></div>
   </div>
 </div>
 
@@ -831,7 +860,7 @@ function renderDetalle(){
       +'<div class="tac-t"><div class="nm">'+t.nm+'</div><div class="ds">'+t.ds+'</div></div>'
       +(recom?'<span class="rec">SUGERIDA</span>':'')+'</div>'
       +'<div class="tac-b">'+sugH+'<div class="'+(t.id==='patrocinio'||t.id==='mesa'?'':(t.campos.length>=3?'f3':t.campos.length===2?'f2':''))+'">'
-      +campos+'</div></div></div>';
+      +campos+'</div>'+((t.id==='oneone'||t.id==='patrocinio')&&on?solTac(t.id,d,st):'')+'</div></div>';
   }).join('');
 
   $('detalle').innerHTML=
@@ -1754,6 +1783,7 @@ function renderMesa(soloCand){
    +'<br><b>Segmentos:</b>'+repartoSeg(inv)+'</div>'
    +'</div></div>'
 
+   +'<div class="sec"><div class="sec-h"><h3>Aprobaci&oacute;n del gasto</h3></div><div class="sec-b">'+solMesa(m,inv)+'</div></div>'
    +'<div class="sec"><div class="sec-h"><h3>Invitados</h3><span class="hint">'+n+' en la lista</span></div>'
    +'<div class="sec-b"><div class="inv">'+invH+'</div></div></div>'
 
@@ -2453,12 +2483,116 @@ function estado(txt,cls){
 }
 
 function iniciarSB(){
-  if(!window.supabase){estado('Sin conexión — guardando local','off');return;}
-  sb=window.supabase.createClient(SB_URL,SB_KEY,{realtime:{params:{eventsPerSecond:5}}});
+  if(!window.supabase){mostrarLogin('No se pudo conectar. Revisa tu internet y recarga la página.');return;}
+  sb=window.supabase.createClient(SB_URL,SB_KEY,{realtime:{params:{eventsPerSecond:5}},auth:{persistSession:true,autoRefreshToken:true,storageKey:'nb-plan-auth'}});
+  sb.auth.onAuthStateChange(function(ev){if(ev==='SIGNED_OUT')mostrarLogin();});
+  sb.auth.getSession().then(function(r){
+    if(r.data&&r.data.session)verificar(r.data.session);else mostrarLogin();
+  },function(){mostrarLogin();});
+}
+
+/* ── Login: mismas cuentas que la app de gastos ── */
+var YO=null,ARRANCADO=false;
+function mostrarLogin(msg){
+  $('login').style.display='flex';
+  var e=$('lg-err');if(msg){e.textContent=msg;e.style.display='block';}else e.style.display='none';
+  var b=$('lg-btn');if(b){b.disabled=false;b.textContent='Ingresar';}
+}
+function entrar(ev){
+  ev.preventDefault();
+  if(!sb){mostrarLogin('Sin conexión. Recarga la página.');return;}
+  var b=$('lg-btn');b.disabled=true;b.textContent='Ingresando…';
+  sb.auth.signInWithPassword({email:$('lg-em').value.trim().toLowerCase(),password:$('lg-pw').value}).then(function(r){
+    if(r.error){mostrarLogin('Correo o contraseña incorrectos.');return;}
+    verificar(r.data.session);
+  },function(){mostrarLogin('No se pudo conectar. Intenta de nuevo.');});
+}
+function verificar(ses){
+  var uid=ses&&ses.user&&ses.user.id;
+  sb.from('expense_profiles').select('id,full_name,role').eq('auth_user_id',uid).eq('is_active',true).eq('account_status','activo').maybeSingle().then(function(r){
+    if(r.error&&!r.data&&/fetch|network/i.test(r.error.message||'')){
+      // sin red: con sesión guardada se trabaja local y se sincroniza al volver la conexión
+      YO=YO||{full_name:'',role:''};arrancar();return;
+    }
+    if(!r.data){sb.auth.signOut();mostrarLogin('Tu cuenta no está activa. Contacta a Gerencia.');return;}
+    YO=r.data;arrancar();
+  },function(){arrancar();});
+}
+function arrancar(){
+  $('login').style.display='none';
+  $('who').innerHTML=(YO&&YO.full_name?esc(YO.full_name):'')+'<a onclick="salir()">Salir</a>';
+  if(ARRANCADO)return;ARRANCADO=true;
   cargarTodo();
   // El proyecto gratuito se pausa por inactividad; esto lo mantiene vivo.
   sb.from('keepalive').select('id').limit(1).then(function(){},function(){});
   suscribir();
+  cargarSolicitudes();
+  window.addEventListener('focus',function(){cargarSolicitudes();});
+}
+function salir(){
+  if(!confirm('¿Cerrar sesión en este equipo?'))return;
+  ['nb_planes','nb_mesas','nb_summits','nb_eventos'].forEach(function(k){try{localStorage.removeItem(k);}catch(_){}});
+  sb.auth.signOut().then(function(){location.reload();},function(){location.reload();});
+}
+
+/* ── Vínculo con la app de gastos: solicitud de aprobación previa ── */
+var GASTOS_URL='https://nutriben-ca.github.io/gastos/';
+var REQS={},SOLPRE={};
+var SOL_ST={borrador:['Borrador sin enviar','wait'],enviado:['Enviada · espera al jefe','wait'],aprobado_distrito:['Aprobada por jefe · falta Gerencia','wait'],aprobado:['Aprobada','ok'],rechazado:['Rechazada','no'],cancelado:['Cancelada','no'],cerrada:['Cerrada','ok']};
+var SOL_SYM={HNL:'L ',USD:'$',EUR:'€',NIO:'C$ ',CRC:'₡'};
+function solMoney(n,c){return (SOL_SYM[c]||'')+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function cargarSolicitudes(){
+  if(!sb||!ARRANCADO)return;
+  sb.from('expense_requests').select('id,folio,status,amount,approved_amount,currency,source_ref,created_at').not('source_ref','is',null).order('created_at',{ascending:true}).then(function(r){
+    if(r.error)return;
+    var M2={};r.data.forEach(function(q){M2[q.source_ref]=q;});
+    var ids=r.data.filter(function(q){return q.status==='aprobado'||q.status==='cerrada';}).map(function(q){return q.id;});
+    var fin=function(){REQS=M2;if(cur&&!DIRTY)repintar();if(curM&&M()&&!DIRTY)renderMesa();};
+    if(!ids.length){fin();return;}
+    sb.rpc('request_usage',{ids:ids}).then(function(u){(u.data||[]).forEach(function(x){r.data.forEach(function(q){if(q.id===x.request_id)q.used=Number(x.used)||0;});});fin();},fin);
+  },function(){});
+}
+function solBar(ref,pre){
+  SOLPRE[ref]=pre;
+  var q=REQS[ref],activa=q&&['borrador','enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1;
+  var rj=esc(ref).replace(/'/g,"\\'");
+  var h='<div class="solbar">';
+  if(q){var st=SOL_ST[q.status]||[q.status,''];
+    h+='<span>&#128221; <b>SOL-'+String(q.folio).padStart(4,'0')+'</b></span><span class="st '+st[1]+'">'+st[0]+'</span>';
+    if(q.status==='aprobado'||q.status==='cerrada')h+='<span>'+solMoney(q.approved_amount!=null?q.approved_amount:q.amount,q.currency)+' aprobado &middot; usado '+solMoney(q.used||0,q.currency)+'</span>';
+    else h+='<span>'+solMoney(q.amount,q.currency)+'</span>';
+  }else h+='<span>Este gasto necesita aprobaci&oacute;n previa en la app de gastos.</span>';
+  h+='<span class="sp"></span>';
+  if(activa)h+='<a class="btn btn-s" href="'+GASTOS_URL+'#ver='+q.id+'" target="_blank" rel="noopener">Ver en Gastos</a>';
+  else h+='<button class="btn btn-p" onclick="pedirSol(\''+rj+'\')">&#128221; '+(q?'Nueva solicitud':'Solicitar aprobaci&oacute;n')+'</button>';
+  return h+'</div>';
+}
+function pedirSol(ref){
+  var pre=SOLPRE[ref];if(!pre)return;
+  if(!pre.date&&!confirm('Esta actividad no tiene fecha. ¿Pedir la aprobación de todas formas? (la puedes poner en la solicitud)'))return;
+  var js=JSON.stringify(Object.assign({ref:ref},pre));
+  var b64=btoa(unescape(encodeURIComponent(js))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  window.open(GASTOS_URL+'#sol='+b64,'_blank','noopener');
+}
+function solTac(id,d,st){
+  var obj=(DRAFT&&DRAFT.objetivo)?DRAFT.objetivo+'. ':'';
+  if(id==='oneone')return solBar('oneone:'+key(d),{tipo:'medicos',sub:'oneone',
+    title:('One to one'+(st.tema?': '+st.tema:'')+' — '+d.n).slice(0,120),
+    just:'Plan de Acción. '+obj+(st.tema?'Tema: '+st.tema+'. ':'')+'Sesión individual de actualización con '+d.n+'.',
+    ben:d.n+(d.esp?' ('+d.esp+')':''),date:st.fecha||'',usd:num(st.monto)});
+  var ev=eventoDe(st),nom=ev?ev.nombre:(st.evento||st.evento_txt||'evento');
+  return solBar('patrocinio:'+key(d),{tipo:'medicos',sub:'patrocinio',
+    title:('Patrocinio: '+nom+' — '+d.n).slice(0,120),
+    just:'Plan de Acción. '+obj+'Patrocinio de '+d.n+' a '+nom+'.',
+    ben:d.n+(d.esp?' ('+d.esp+')':''),date:fechaPat(st)||'',usd:num(st.monto)});
+}
+function solMesa(m,inv){
+  var nombres=inv.map(function(d){return d.n;});
+  var ben=nombres.slice(0,12).join(', ')+(nombres.length>12?' y '+(nombres.length-12)+' más':'');
+  return solBar('mesa:'+m.id,{tipo:'medicos',sub:'mesa',
+    title:('Mesa redonda: '+(m.tema||'sin tema')).slice(0,120),
+    just:'Plan de Acción. Mesa redonda'+(m.sede?' en '+m.sede:'')+' con '+inv.length+' médico(s).'+(m.notas?' '+m.notas:''),
+    ben:ben,date:m.fecha||'',usd:num(m.monto)});
 }
 
 function cargarTodo(){
