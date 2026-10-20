@@ -159,7 +159,8 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   .f3,.f2{grid-template-columns:1fr}
 }
 
-.navb{background:var(--azul75);display:flex;gap:0;padding:0 18px}
+.navb{background:var(--azul75);display:flex;gap:0;padding:0 18px;overflow-x:auto;scrollbar-width:none}
+.navb .nv{white-space:nowrap;flex-shrink:0}
 .nv{padding:9px 16px;font-size:12px;font-weight:600;color:#cfd9ef;cursor:pointer;
   border-bottom:3px solid transparent;display:flex;align-items:center;gap:7px}
 .nv:hover{color:#fff}
@@ -347,7 +348,8 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 
 <div class="navb">
   <div class="nv active" id="nv-planes" onclick="vista('planes')">&#128203; Planes por m&eacute;dico</div>
-  <div class="nv" id="nv-pyo" onclick="vista('pyo')">&#9992;&#65039; Patrocinios y 1:1 <span class="nvc" id="nv-ec">0</span></div>
+  <div class="nv" id="nv-pyo" onclick="vista('pyo')">&#9992;&#65039; Patrocinios <span class="nvc" id="nv-ec">0</span></div>
+  <div class="nv" id="nv-oo" onclick="vista('oo')">&#129309; One to one <span class="nvc" id="nv-oc">0</span></div>
   <div class="nv" id="nv-mesas" onclick="vista('mesas')">&#127908; Mesas redondas <span class="nvc" id="nv-mc">0</span></div>
   <div class="nv" id="nv-summits" onclick="vista('summits')">&#9968; Summits locales <span class="nvc" id="nv-sc">0</span></div>
   <div class="nv" id="nv-presu" onclick="vista('presu')">&#128176; Presupuesto</div>
@@ -406,7 +408,6 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 
 <div id="v-pyo" style="display:none">
   <div class="mrbar">
-    <div class="seg2"><span id="pyo-ev" class="on" onclick="setPyo('ev')">Eventos de patrocinio</span><span id="pyo-oo" onclick="setPyo('oo')">One to one</span></div>
     <label>Visitador
       <select id="e-mr" onchange="renderPyo();candEvento()"><option value="">Todos los MR</option></select>
     </label>
@@ -732,6 +733,7 @@ function renderList(){
   var lbl=$('k-tot').parentNode.querySelector('.l');
   if(lbl)lbl.textContent=mr&&sinE?('en cartera · '+sinE+' sin encuesta'):'m\u00e9dicos en cartera';
   $('k-pl').textContent=mr?conPlan.length:'—';
+  cntOO();
   $('k-inv').textContent=mr?fmtUSD(inv):'—';
   if(!mr){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center;line-height:1.6">Selecciona tu nombre en el men&uacute; de arriba<br>para ver tu cartera de m&eacute;dicos.</div>';return;}
   if(!d.length){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center">Ning&uacute;n m&eacute;dico con estos filtros.</div>';return;}
@@ -1315,7 +1317,6 @@ function guardaPlanDe(k,fn){
    ═══════════════════════════════════════════════════════════ */
 function setPyo(v){
   PYO=v;
-  $('pyo-ev').className=v==='ev'?'on':'';$('pyo-oo').className=v==='oo'?'on':'';
   $('pyo-ev-v').style.display=v==='ev'?'':'none';$('pyo-oo-v').style.display=v==='oo'?'':'none';
   $('e-nuevo').style.display=v==='ev'?'':'none';
   renderPyo();
@@ -1484,7 +1485,12 @@ function filasOO(){
   }).map(function(k){var v=PLANES[k].oneone,d=byKey(k);
     return {k:k,d:d,mr:k.split('||')[0],n:d?d.n:k.split('||')[1],tema:v.tema||'',fecha:v.fecha||'',monto:num(v.monto)};});
 }
+function cntOO(){
+  var n=Object.keys(PLANES).filter(function(k){var v=PLANES[k].oneone;return v&&v.activo;}).length;
+  var b=$('nv-oc');if(b)b.textContent=n;
+}
 function renderOO(){
+  cntOO();
   var L=filasOO(),c={prox:0,sinf:0,real:0},t=0;
   L.forEach(function(x){c[estadoFecha(x.fecha)]++;t+=x.monto;});
   $('e-cnt').textContent=L.length+' one to one · '+fmtUSD(t);
@@ -1520,12 +1526,16 @@ function exportPyo(){
   });
   R.push([]);R.push(['TOTAL','','','','','','','','','',R.reduce(function(a,r){return a+(typeof r[10]==='number'?r[10]:0);},0)]);
   var ws=XLSX.utils.aoa_to_sheet([H].concat(R));ws['!cols']=H.map(function(h,i){return {wch:i===0||i===6?28:12};});
+  if(PYO==='oo'){
+    var O=filasOO().map(function(x){return [x.n,x.mr,x.d?x.d.pais:'',x.tema,x.fecha,EST_NOM[estadoFecha(x.fecha)],x.monto];});
+    var wo=XLSX.utils.aoa_to_sheet([['Médico','Visitador','País','Tema','Fecha','Estado','US$']].concat(O));
+    wo['!cols']=[{wch:28},{wch:18},{wch:12},{wch:44},{wch:12},{wch:13},{wch:10}];
+    XLSX.utils.book_append_sheet(wb,wo,'One to one');
+    XLSX.writeFile(wb,'One_to_one_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('Excel generado');return;
+  }
   XLSX.utils.book_append_sheet(wb,ws,'Patrocinios');
-  var O=filasOO().map(function(x){return [x.n,x.mr,x.d?x.d.pais:'',x.tema,x.fecha,EST_NOM[estadoFecha(x.fecha)],x.monto];});
-  var wo=XLSX.utils.aoa_to_sheet([['Médico','Visitador','País','Tema','Fecha','Estado','US$']].concat(O));
-  wo['!cols']=[{wch:28},{wch:18},{wch:12},{wch:44},{wch:12},{wch:13},{wch:10}];
-  XLSX.utils.book_append_sheet(wb,wo,'One to one');
-  XLSX.writeFile(wb,'Patrocinios_y_1a1_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'Patrocinios_'+new Date().toISOString().slice(0,10)+'.xlsx');
   toast('Excel generado');
 }
 
@@ -1568,11 +1578,16 @@ function saveMesas(mesa){
 }
 
 function vista(v){
+  /* Patrocinios y One to one comparten panel y filtros; son pestañas separadas */
+  var panel=v==='oo'?'pyo':v;
   ['planes','pyo','mesas','summits','presu'].forEach(function(x){
-    $('v-'+x).style.display=v===x?'':'none';
+    $('v-'+x).style.display=panel===x?'':'none';
+  });
+  ['planes','pyo','oo','mesas','summits','presu'].forEach(function(x){
     $('nv-'+x).className='nv'+(v===x?' active':'');
   });
-  if(v==='pyo')renderPyo();
+  if(v==='pyo')setPyo('ev');
+  if(v==='oo')setPyo('oo');
   if(v==='mesas')renderMesas();
   if(v==='summits')renderSummits();
   if(v==='presu')renderPresu();
@@ -1801,6 +1816,7 @@ function exportMesas(){
   var se=$('e-mr');
   MRS.forEach(function(m){if(m==='(sin asignar)')return;var o=document.createElement('option');o.value=m;o.textContent=m;se.appendChild(o);});
   $('nv-ec').textContent=EVENTOS.length;
+  cntOO();
 })();
 
 /* ═══════════════════════════════════════════════════════════
