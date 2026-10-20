@@ -249,7 +249,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .mini{height:3px;background:#dde5f2;border-radius:2px;margin-top:4px}
 .mini i{display:block;height:100%;background:var(--cielo);border-radius:2px}
 .sol{border:1px solid var(--ln);border-radius:8px;overflow:hidden;background:var(--w)}
-.sol-r{display:grid;grid-template-columns:104px 1fr 132px 96px 108px 30px;gap:7px;
+.sol-r{display:grid;grid-template-columns:104px 1fr 132px 96px 170px 30px;gap:7px;
   padding:8px 10px;border-bottom:1px solid #f4f6fb;align-items:center}
 .sol-r:last-child{border-bottom:none}
 .sol-h{background:var(--bg);font-size:9.5px;font-weight:700;color:var(--t3);letter-spacing:.04em}
@@ -343,6 +343,8 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .solbar .st{font-weight:700;padding:2px 8px;border-radius:10px;background:#e3e9f7;color:#2a3a66}
 .solbar .st.ok{background:#dcf5e3;color:#166534}.solbar .st.no{background:#fde2e2;color:#991b1b}.solbar .st.wait{background:#fff3cd;color:#8a6000}
 .solbar .sp{flex:1}
+.solchip{display:inline-block;font-size:11px;font-weight:700;padding:4px 8px;border-radius:10px;background:#e3e9f7;color:#2a3a66;white-space:nowrap}
+.solchip.ok{background:#dcf5e3;color:#166534}.solchip.no{background:#fde2e2;color:#991b1b}.solchip.wait{background:#fff3cd;color:#8a6000}
 </style>
 </head>
 <body>
@@ -954,7 +956,7 @@ function renderDetalleSoftKeep(){var d=DRAFT;renderDetalle();DRAFT=d;
 function addSol(){
   DRAFT.solicitudes=DRAFT.solicitudes||[];
   DRAFT.solicitudes.push({fecha:new Date().toISOString().slice(0,10),
-    concepto:'',cat:'juguetes',monto:'',estado:'solicitado'});
+    concepto:'',cat:'juguetes',monto:'',estado:'solicitado',id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)});
   tocar();repintar();
 }
 function setSol(i,campo,val){
@@ -964,6 +966,29 @@ function setSol(i,campo,val){
 }
 function delSol(i){
   DRAFT.solicitudes.splice(i,1);tocar();repintar();
+}
+/* Solicitud puntual → aprobación en la app de gastos (cada fila tiene id estable) */
+function solPuntualRef(x){return 'puntual:'+key(cur)+'#'+x.id;}
+function solPuntualCell(x,i){
+  var q=x.id?REQS[solPuntualRef(x)]:null;
+  var activa=q&&['borrador','enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1;
+  if(activa||(q&&q.status==='cerrada')){
+    var st=SOL_ST[q.status]||[q.status,''];
+    return '<a href="'+GASTOS_URL+'#ver='+q.id+'" target="_blank" rel="noopener" title="Ver SOL-'+String(q.folio).padStart(4,'0')+' en Gastos" style="text-decoration:none"><span class="solchip '+st[1]+'">SOL-'+String(q.folio).padStart(4,'0')+' &middot; '+st[0].split(' ·')[0]+'</span></a>';
+  }
+  return '<button class="btn btn-p" style="padding:6px 8px;font-size:11px" onclick="pedirSolPuntual('+i+')">&#128221; '+(q?'Volver a solicitar':'Solicitar aprobaci&oacute;n')+'</button>';
+}
+function pedirSolPuntual(i){
+  var x=DRAFT.solicitudes[i];if(!x)return;
+  if(!(x.concepto||'').trim()){toast('Escribe el concepto antes de pedir la aprobación');return;}
+  if(!(num(x.monto)>0)){toast('Pon el monto estimado en US$ antes de pedir la aprobación');return;}
+  if(!x.id){x.id='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+  guardar(); // el plan se guarda para que el vínculo no se pierda
+  var c=CATSOL.filter(function(z){return z.k===x.cat;})[0],ref=solPuntualRef(x);
+  SOLPRE[ref]={tipo:'medicos',sub:'puntual',title:(x.concepto+' — '+cur.n).slice(0,120),
+    just:'Plan de Acción. Solicitud puntual'+(c?' ('+c.n+')':'')+' para '+cur.n+'.'+(DRAFT.objetivo?' Objetivo con el médico: '+DRAFT.objetivo+'.':''),
+    ben:cur.n+(cur.esp?' ('+cur.esp+')':''),date:x.fecha||'',usd:num(x.monto)};
+  pedirSol(ref);
 }
 function actualizarTotalSol(){
   var el=$('sol-tot');
@@ -979,9 +1004,7 @@ function bloqueSol(p){
         +CATSOL.map(function(c){return '<option value="'+c.k+'"'+(x.cat===c.k?' selected':'')+'>'+c.ic+' '+c.n+'</option>';}).join('')
       +'</select>'
       +'<input type="number" placeholder="0" value="'+esc(x.monto||'')+'" oninput="setSol('+i+',\'monto\',this.value)">'
-      +'<select class="est-'+(x.estado||'solicitado')+'" onchange="setSol('+i+',\'estado\',this.value);repintar()">'
-        +ESTSOL.map(function(e){return '<option value="'+e[0]+'"'+(x.estado===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')
-      +'</select>'
+      +solPuntualCell(x,i)
       +'<button class="sol-x" onclick="delSol('+i+')" title="Quitar">&times;</button>'
       +'</div>';
   }).join('')
@@ -991,7 +1014,7 @@ function bloqueSol(p){
     +'<button class="btn btn-s" onclick="addSol()">+ Agregar solicitud</button></div>'
     +'<div class="sec-b">'
     +'<div class="sol">'
-    +(L.length?'<div class="sol-r sol-h"><span>FECHA</span><span>CONCEPTO</span><span>CATEGOR&Iacute;A</span><span>US$</span><span>ESTADO</span><span></span></div>':'')
+    +(L.length?'<div class="sol-r sol-h"><span>FECHA</span><span>CONCEPTO</span><span>CATEGOR&Iacute;A</span><span>US$</span><span>APROBACI&Oacute;N</span><span></span></div>':'')
     +filas+'</div>'
     +'<div class="sol-tot"><span>Total de solicitudes del a&ntilde;o</span><strong id="sol-tot">'+fmtUSD(totalSol(p))+'</strong></div>'
     +'</div></div>';
