@@ -261,6 +261,8 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .sol-tot strong{font-size:15px;color:var(--azul);font-variant-numeric:tabular-nums}
 .tag-sd{background:#fdf6e0;color:#8a6000;font-size:8.5px;font-weight:800;padding:1px 5px;
   border-radius:3px;letter-spacing:.03em;white-space:nowrap}
+.tag-rd{background:#e3f6ee;color:#0a6b4d;font-size:8.5px;font-weight:800;padding:1px 5px;
+  border-radius:3px;letter-spacing:.03em;white-space:nowrap}
 .tag-fm{background:#f0edf9;color:#4a3f8f;font-size:8.5px;font-weight:800;padding:1px 5px;
   border-radius:3px;letter-spacing:.03em;white-space:nowrap}
 .doc.sd{opacity:.78}
@@ -344,6 +346,11 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .solbar .st.ok{background:#dcf5e3;color:#166534}.solbar .st.no{background:#fde2e2;color:#991b1b}.solbar .st.wait{background:#fff3cd;color:#8a6000}
 .solbar .sp{flex:1}
 .tag-ct{display:inline-block;font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;background:#e6f6ef;color:#166534;margin-left:4px;vertical-align:middle}
+#rd-mo{position:fixed;inset:0;z-index:9000;background:rgba(10,20,50,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#rd-mo .box{background:#fff;border-radius:12px;width:100%;max-width:520px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
+#rd-mo h3{margin:0 0 6px;font-size:16px;color:#0033A1}
+#rd-mo .it{display:flex;gap:8px;align-items:center;padding:9px 0;border-top:1px solid #e6eaf3}
+#rd-mo .it .t{flex:1;min-width:0;font-size:13px}#rd-mo .it .t small{display:block;color:#6a7488;font-size:11px}
 #ct-mo{position:fixed;inset:0;z-index:9000;background:rgba(10,20,50,.45);display:none;align-items:center;justify-content:center;padding:16px}
 #ct-mo .box{background:#fff;border-radius:12px;width:100%;max-width:440px;padding:18px 18px 14px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
 #ct-mo h3{margin:0 0 10px;font-size:16px;color:#0033A1}
@@ -422,6 +429,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
       <option value="con">Con encuesta</option>
       <option value="sin">Sin encuesta</option>
       <option value="fm">Fuera del CRM</option>
+      <option value="rad">Enviados desde Radar</option>
     </select>
   </label>
   <label>Tipo
@@ -432,6 +440,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   </label>
   <input type="text" id="f-q" placeholder="Buscar nombre, ciudad o instituci&oacute;n…" style="width:180px" oninput="renderList()">
   <button class="btn btn-s" onclick="abrirContacto()">+ Profesional</button>
+  <button class="btn btn-s" id="btn-pend" style="display:none" onclick="verPendientes()">Pendientes de Radar</button>
   <span class="badge" id="cnt">—</span>
   <button class="btn btn-p" onclick="exportar()">&#8681; Excel</button>
 </div>
@@ -544,6 +553,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="rd-mo" onclick="if(event.target===this)cerrarPend()"><div class="box"><h3>Pendientes de alta desde el Radar</h3><div style="font-size:12px;color:#5a6478">Médicos que marcaste en el Radar y no tienen ficha aquí. Dalos de alta con el formulario de profesional; ahí completas la institución.</div><div id="rd-list"></div><div style="text-align:right;margin-top:12px"><button class="btn btn-s" onclick="cerrarPend()">Cerrar</button></div></div></div>
 <div id="ct-mo" onclick="if(event.target===this)cerrarContacto()"><div class="box">
   <h3 id="ct-t">Agregar profesional de salud</h3>
   <div style="font-size:12px;color:#5a6478">Enfermeras, dependientes de farmacia, personal administrativo u otros que no est&aacute;n en la cartera de m&eacute;dicos.</div>
@@ -770,6 +780,7 @@ function filtrados(){
     if(dat==='con'&&d.sin_datos)return false;
     if(dat==='sin'&&!d.sin_datos)return false;
     if(dat==='fm'&&!d.fuera_maestro)return false;
+    if(dat==='rad'&&!envios()[key(d)])return false;
     if(seg&&d.seg!==seg)return false;
     if(tier&&d.tier!==tier)return false;
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
@@ -785,7 +796,38 @@ function filtrados(){
   });
 }
 
+/* ── Envíos desde el Radar de Prescriptores (mismo dominio, localStorage) ── */
+function envios(){try{return JSON.parse(localStorage.getItem('nb_radar_envios')||'{}')||{};}catch(e){return {};}}
+function setEnvios(o){try{localStorage.setItem('nb_radar_envios',JSON.stringify(o));}catch(e){}}
+function bannerRadar(d,p){
+  var e=envios()[key(d)];if(!e||(p&&p.objetivo))return '';
+  var f=e.t?new Date(e.t).toLocaleDateString('es-HN',{day:'2-digit',month:'short'}):'';
+  return '<div class="sec" style="border-color:#9fd3c3;background:#f0faf6"><div class="sec-b" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<div style="flex:1;min-width:220px"><b style="font-size:11px">Enviado desde el Radar de Prescriptores</b> <span style="font-size:10px;color:#667">'+esc(f)+'</span>'
+    +'<div style="font-size:11.5px;margin-top:3px">Objetivo sugerido: '+esc(e.o||'')+'</div></div>'
+    +'<button class="btn btn-p" onclick="usarEnvio()">Usar como objetivo</button><button class="btn btn-s" onclick="quitarEnvio()">Quitar marca</button></div></div>';
+}
+function pendientes(){var o=envios();return Object.keys(o).filter(function(k){return o[k]&&o[k].alta;}).map(function(k){var e=o[k];e.__k=k;return e;});}
+function actPend(){var n=pendientes().length,b=$('btn-pend');if(b){b.style.display=n?'':'none';b.textContent='Pendientes de Radar ('+n+')';}}
+var RD_PEND=null;
+function verPendientes(){
+  var L=pendientes();
+  $('rd-list').innerHTML=L.length?L.map(function(e,i){return '<div class="it"><div class="t"><b>'+esc(e.nombre)+'</b><small>'+esc(e.esp||'')+' &middot; '+esc(e.loc||'')+', '+esc(e.pais||'')+'</small></div>'
+    +'<button class="btn btn-p" onclick="altaPend('+i+')">Dar de alta</button><button class="btn btn-s" onclick="descPend('+i+')">Descartar</button></div>';}).join(''):'<div style="padding:14px 0;color:#6a7488;font-size:12.5px">No hay pendientes.</div>';
+  $('rd-mo').style.display='flex';
+}
+function cerrarPend(){$('rd-mo').style.display='none';}
+function altaPend(i){
+  var e=pendientes()[i];if(!e)return;
+  cerrarPend();abrirContacto();RD_PEND=e.__k;
+  $('ct-n').value=e.nombre;$('ct-tipo').value='otro';$('ct-area').value=('Médico · '+(e.esp||'')).slice(0,80);$('ct-ciu').value=e.loc||'';
+}
+function descPend(i){var e=pendientes()[i];if(!e)return;var o=envios();delete o[e.__k];setEnvios(o);actPend();verPendientes();}
+function usarEnvio(){var e=envios()[key(cur)];if(!e)return;DRAFT.objetivo=e.o||'';tocar();renderDetalleSoftKeep();}
+function quitarEnvio(){var o=envios();delete o[key(cur)];setEnvios(o);renderList();renderDetalleSoftKeep();}
+
 function renderList(){
+  actPend();
   var d=filtrados();
   $('cnt').textContent=d.length+' m\u00e9dico'+(d.length===1?'':'s');
   var mr=$('f-mr').value;
@@ -809,7 +851,7 @@ function renderList(){
       +'<div class="chk">'+(tiene?'&#10003;':'')+'</div>'
       +'<div class="dt"><div class="dn">'+esc(x.n)
         +(x.contacto?' <span class="tag-ct">'+CT_TIPO_CORTO[x.contacto.tipo]+'</span>':(x.sin_datos?' <span class="tag-sd">SIN ENCUESTA</span>':''))
-        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+'</div>'
+        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+(!tiene&&envios()[k]?' <span class="tag-rd">RADAR</span>':'')+'</div>'
       +'<div class="dm">'+(esGlob(mr)?'<b>'+esc(x.mr)+'</b> &middot; ':'')+esc(x.esp)+' &middot; '+(x.ciudad?esc(x.ciudad)+' &middot; ':'')
         +(x.contacto?esc(x.contacto.institucion):(x.sin_datos?'sin datos de encuesta':'Seg. '+x.seg))+'</div></div>'
       +'<div class="dr">'+(x.contacto?'':'<span class="tier tT'+x.tier.replace('TIER ','')+'">'+x.tier.replace('TIER ','T')+'</span>')
@@ -931,6 +973,7 @@ function renderDetalle(){
 
    +bloqueSol(p)
 
+   +bannerRadar(d,p)
    +'<div class="sec"><div class="sec-h"><h3>Objetivo y notas</h3></div><div class="sec-b">'
    +'<div class="fg"><label>Objetivo del ciclo con este m&eacute;dico</label>'
    +'<input type="text" id="obj" placeholder="Ej: llevar Confort de 2 a 5 inicios semanales" value="'
@@ -2685,7 +2728,7 @@ function abrirContacto(id){
   $('ct-del').style.display=c?'':'none';
   $('ct-mo').style.display='flex';setTimeout(function(){$('ct-n').focus();},50);
 }
-function cerrarContacto(){$('ct-mo').style.display='none';CT_EDIT=null;}
+function cerrarContacto(){$('ct-mo').style.display='none';CT_EDIT=null;RD_PEND=null;}
 function guardarContacto(){
   var nombre=$('ct-n').value.trim(),inst=$('ct-inst').value.trim(),mr=$('ct-mr').value;
   if(nombre.length<2){toast('Escribe el nombre');return;}
@@ -2698,6 +2741,7 @@ function guardarContacto(){
   q.then(function(r){
     if(r.error){toast(/duplicate|unique/i.test(r.error.message)?'Ya existe un profesional con ese nombre para ese visitador':'No se pudo guardar: '+r.error.message);return;}
     cerrarContacto();
+    if(!editando&&RD_PEND){var oe=envios();delete oe[RD_PEND];setEnvios(oe);RD_PEND=null;actPend();}
     cargarContactos().then(function(){
       if(!editando){$('f-mr').value=mr;$('f-tipo').value='';}
       renderList();abrir(mr+'||'+nombre);toast(editando?'Profesional actualizado':'Profesional agregado');
