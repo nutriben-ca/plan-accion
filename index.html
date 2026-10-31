@@ -800,19 +800,22 @@ function filtrados(){
 function envios(){try{return JSON.parse(localStorage.getItem('nb_radar_envios')||'{}')||{};}catch(e){return {};}}
 function setEnvios(o){try{localStorage.setItem('nb_radar_envios',JSON.stringify(o));}catch(e){}}
 function bannerRadar(d,p){
-  var e=envios()[key(d)];if(!e||(p&&p.objetivo))return '';
+  var e=envios()[key(d)];if(!e)return '';
+  var falt=(e.tac||[]).filter(function(t){return !(p&&p[t]&&p[t].activo);});
+  if(p&&p.objetivo&&!falt.length)return '';
   var f=e.t?new Date(e.t).toLocaleDateString('es-HN',{day:'2-digit',month:'short'}):'';
   return '<div class="sec" style="border-color:#9fd3c3;background:#f0faf6"><div class="sec-b" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
     +'<div style="flex:1;min-width:220px"><b style="font-size:11px">Enviado desde el Radar de Prescriptores</b> <span style="font-size:10px;color:#667">'+esc(f)+'</span>'
-    +'<div style="font-size:11.5px;margin-top:3px">Objetivo sugerido: '+esc(e.o||'')+'</div></div>'
-    +'<button class="btn btn-p" onclick="usarEnvio()">Usar como objetivo</button><button class="btn btn-s" onclick="quitarEnvio()">Quitar marca</button></div></div>';
+    +'<div style="font-size:11.5px;margin-top:3px">Objetivo sugerido: '+esc(e.o||'')+'</div>'
+    +(falt.length?'<div style="font-size:11.5px;margin-top:3px">Tácticas propuestas: '+falt.map(function(t){var x=TACTICAS.filter(function(z){return z.id===t;})[0];return x?x.ic+' '+x.nm:t;}).join(' · ')+'</div>':'')+'</div>'
+    +'<button class="btn btn-p" onclick="usarEnvio()">Aplicar sugerencia</button><button class="btn btn-s" onclick="quitarEnvio()">Quitar marca</button></div></div>';
 }
 function pendientes(){var o=envios();return Object.keys(o).filter(function(k){return o[k]&&o[k].alta;}).map(function(k){var e=o[k];e.__k=k;return e;});}
 function actPend(){var n=pendientes().length,b=$('btn-pend');if(b){b.style.display=n?'':'none';b.textContent='Pendientes de Radar ('+n+')';}}
 var RD_PEND=null;
 function verPendientes(){
   var L=pendientes();
-  $('rd-list').innerHTML=L.length?L.map(function(e,i){return '<div class="it"><div class="t"><b>'+esc(e.nombre)+'</b><small>'+esc(e.esp||'')+' &middot; '+esc(e.loc||'')+', '+esc(e.pais||'')+'</small></div>'
+  $('rd-list').innerHTML=L.length?L.map(function(e,i){return '<div class="it"><div class="t"><b>'+esc(e.nombre)+'</b><small>'+esc(e.esp||'')+' &middot; '+esc(e.loc||'')+', '+esc(e.pais||'')+((e.tac||[]).length?' &middot; '+e.tac.map(function(t){var x=TACTICAS.filter(function(z){return z.id===t;})[0];return x?x.nm:t;}).join(', '):'')+'</small></div>'
     +'<button class="btn btn-p" onclick="altaPend('+i+')">Dar de alta</button><button class="btn btn-s" onclick="descPend('+i+')">Descartar</button></div>';}).join(''):'<div style="padding:14px 0;color:#6a7488;font-size:12.5px">No hay pendientes.</div>';
   $('rd-mo').style.display='flex';
 }
@@ -823,7 +826,7 @@ function altaPend(i){
   $('ct-n').value=e.nombre;$('ct-tipo').value='otro';$('ct-area').value=('Médico · '+(e.esp||'')).slice(0,80);$('ct-ciu').value=e.loc||'';
 }
 function descPend(i){var e=pendientes()[i];if(!e)return;var o=envios();delete o[e.__k];setEnvios(o);actPend();verPendientes();}
-function usarEnvio(){var e=envios()[key(cur)];if(!e)return;DRAFT.objetivo=e.o||'';tocar();renderDetalleSoftKeep();}
+function usarEnvio(){var e=envios()[key(cur)];if(!e)return;if(!DRAFT.objetivo)DRAFT.objetivo=e.o||'';(e.tac||[]).forEach(function(t){DRAFT[t]=DRAFT[t]||{};DRAFT[t].activo=true;});tocar();renderDetalleSoftKeep();}
 function quitarEnvio(){var o=envios();delete o[key(cur)];setEnvios(o);renderList();renderDetalleSoftKeep();}
 
 function renderList(){
@@ -2741,7 +2744,7 @@ function guardarContacto(){
   q.then(function(r){
     if(r.error){toast(/duplicate|unique/i.test(r.error.message)?'Ya existe un profesional con ese nombre para ese visitador':'No se pudo guardar: '+r.error.message);return;}
     cerrarContacto();
-    if(!editando&&RD_PEND){var oe=envios();delete oe[RD_PEND];setEnvios(oe);RD_PEND=null;actPend();}
+    if(!editando&&RD_PEND){var oe=envios(),pe=oe[RD_PEND];delete oe[RD_PEND];if(pe)oe[mr+'||'+nombre]={o:pe.o,tac:pe.tac||[],t:pe.t};setEnvios(oe);RD_PEND=null;actPend();}
     cargarContactos().then(function(){
       if(!editando){$('f-mr').value=mr;$('f-tipo').value='';}
       renderList();abrir(mr+'||'+nombre);toast(editando?'Profesional actualizado':'Profesional agregado');
