@@ -780,7 +780,7 @@ function filtrados(){
     if(dat==='con'&&d.sin_datos)return false;
     if(dat==='sin'&&!d.sin_datos)return false;
     if(dat==='fm'&&!d.fuera_maestro)return false;
-    if(dat==='rad'&&!envios()[key(d)])return false;
+    if(dat==='rad'&&!radarPend(key(d)))return false;
     if(seg&&d.seg!==seg)return false;
     if(tier&&d.tier!==tier)return false;
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
@@ -801,15 +801,22 @@ function envios(){try{return JSON.parse(localStorage.getItem('nb_radar_envios')|
 function setEnvios(o){try{localStorage.setItem('nb_radar_envios',JSON.stringify(o));}catch(e){}}
 function bannerRadar(d,p){
   var e=envios()[key(d)];if(!e)return '';
-  var falt=(e.tac||[]).filter(function(t){return !(p&&p[t]&&p[t].activo);});
-  if(p&&p.objetivo&&!falt.length)return '';
+  var g=PLANES[key(d)]||null; /* lo ya guardado, no el borrador (que trae tácticas sugeridas por defecto) */
+  var nm=function(t){var x=TACTICAS.filter(function(z){return z.id===t;})[0];return x?x.ic+' '+x.nm:t;};
+  var yaG=(e.tac||[]).filter(function(t){return g&&g[t]&&g[t].activo;});
+  var falt=(e.tac||[]).filter(function(t){return !(g&&g[t]&&g[t].activo);});
+  if(g&&!falt.length)return '';
   var f=e.t?new Date(e.t).toLocaleDateString('es-HN',{day:'2-digit',month:'short'}):'';
+  var act=g?Object.keys(g).filter(function(t){return g[t]&&g[t].activo&&TACTICAS.some(function(z){return z.id===t;});}):[];
   return '<div class="sec" style="border-color:#9fd3c3;background:#f0faf6"><div class="sec-b" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
     +'<div style="flex:1;min-width:220px"><b style="font-size:11px">Enviado desde el Radar de Prescriptores</b> <span style="font-size:10px;color:#667">'+esc(f)+'</span>'
     +'<div style="font-size:11.5px;margin-top:3px">Objetivo sugerido: '+esc(e.o||'')+'</div>'
-    +(falt.length?'<div style="font-size:11.5px;margin-top:3px">Tácticas propuestas: '+falt.map(function(t){var x=TACTICAS.filter(function(z){return z.id===t;})[0];return x?x.ic+' '+x.nm:t;}).join(' · ')+'</div>':'')+'</div>'
-    +'<button class="btn btn-p" onclick="usarEnvio()">Aplicar sugerencia</button><button class="btn btn-s" onclick="quitarEnvio()">Quitar marca</button></div></div>';
+    +(falt.length?'<div style="font-size:11.5px;margin-top:3px">Tácticas nuevas propuestas: '+falt.map(nm).join(' · ')+'</div>':'')
+    +(g?'<div style="font-size:11px;margin-top:3px;color:#556">Este médico ya tiene plan guardado'+(act.length?' con: '+act.map(nm).join(' · '):' (sin tácticas activas)')+'. Al aplicar solo se agregan las tácticas nuevas; lo ya guardado no se cambia.</div>':'')
+    +'</div>'
+    +'<button class="btn btn-p" onclick="usarEnvio()">'+(g?'Agregar tácticas nuevas':'Aplicar sugerencia')+'</button><button class="btn btn-s" onclick="quitarEnvio()">Quitar marca</button></div></div>';
 }
+function radarPend(k){var e=envios()[k];if(!e)return false;var g=PLANES[k];if(!g)return true;return (e.tac||[]).some(function(t){return !(g[t]&&g[t].activo);});}
 function pendientes(){var o=envios();return Object.keys(o).filter(function(k){return o[k]&&o[k].alta;}).map(function(k){var e=o[k];e.__k=k;return e;});}
 function actPend(){var n=pendientes().length,b=$('btn-pend');if(b){b.style.display=n?'':'none';b.textContent='Pendientes de Radar ('+n+')';}}
 var RD_PEND=null;
@@ -826,7 +833,7 @@ function altaPend(i){
   $('ct-n').value=e.nombre;$('ct-tipo').value='otro';$('ct-area').value=('Médico · '+(e.esp||'')).slice(0,80);$('ct-ciu').value=e.loc||'';
 }
 function descPend(i){var e=pendientes()[i];if(!e)return;var o=envios();delete o[e.__k];setEnvios(o);actPend();verPendientes();}
-function usarEnvio(){var e=envios()[key(cur)];if(!e)return;if(!DRAFT.objetivo)DRAFT.objetivo=e.o||'';(e.tac||[]).forEach(function(t){DRAFT[t]=DRAFT[t]||{};DRAFT[t].activo=true;});tocar();renderDetalleSoftKeep();}
+function usarEnvio(){var e=envios()[key(cur)];if(!e)return;if(!DRAFT.objetivo)DRAFT.objetivo=e.o||'';(e.tac||[]).forEach(function(t){DRAFT[t]=DRAFT[t]||{};if(!DRAFT[t].activo)DRAFT[t].activo=true;});tocar();renderDetalleSoftKeep();}
 function quitarEnvio(){var o=envios();delete o[key(cur)];setEnvios(o);renderList();renderDetalleSoftKeep();}
 
 function renderList(){
@@ -854,7 +861,7 @@ function renderList(){
       +'<div class="chk">'+(tiene?'&#10003;':'')+'</div>'
       +'<div class="dt"><div class="dn">'+esc(x.n)
         +(x.contacto?' <span class="tag-ct">'+CT_TIPO_CORTO[x.contacto.tipo]+'</span>':(x.sin_datos?' <span class="tag-sd">SIN ENCUESTA</span>':''))
-        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+(!tiene&&envios()[k]?' <span class="tag-rd">RADAR</span>':'')+'</div>'
+        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+(radarPend(k)?' <span class="tag-rd">RADAR</span>':'')+'</div>'
       +'<div class="dm">'+(esGlob(mr)?'<b>'+esc(x.mr)+'</b> &middot; ':'')+esc(x.esp)+' &middot; '+(x.ciudad?esc(x.ciudad)+' &middot; ':'')
         +(x.contacto?esc(x.contacto.institucion):(x.sin_datos?'sin datos de encuesta':'Seg. '+x.seg))+'</div></div>'
       +'<div class="dr">'+(x.contacto?'':'<span class="tier tT'+x.tier.replace('TIER ','')+'">'+x.tier.replace('TIER ','T')+'</span>')
