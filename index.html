@@ -353,6 +353,13 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .solbar .st.ok{background:#dcf5e3;color:#166534}.solbar .st.no{background:#fde2e2;color:#991b1b}.solbar .st.wait{background:#fff3cd;color:#8a6000}
 .solbar .sp{flex:1}
 .tag-ct{display:inline-block;font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;background:#e6f6ef;color:#166534;margin-left:4px;vertical-align:middle}
+#cal-mo{position:fixed;inset:0;z-index:9000;background:rgba(10,20,50,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#cal-mo .box{background:#fff;border-radius:12px;width:100%;max-width:640px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
+#cal-mo h3{margin:0 0 6px;font-size:16px;color:#0033A1}
+#cal-mo .it{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid #e6eaf3}
+#cal-mo .it .t{flex:1;min-width:0;font-size:13px}#cal-mo .it .t small{display:block;color:#6a7488;font-size:11px;margin-top:2px}
+.ctab .clk{cursor:pointer;border-bottom:1px dotted currentColor}
+.ctab .clk:hover{color:#00A0DF}
 #rd-mo{position:fixed;inset:0;z-index:9000;background:rgba(10,20,50,.45);display:none;align-items:center;justify-content:center;padding:16px}
 #rd-mo .box{background:#fff;border-radius:12px;width:100%;max-width:520px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
 #rd-mo h3{margin:0 0 6px;font-size:16px;color:#0033A1}
@@ -561,6 +568,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="cal-mo" onclick="if(event.target===this)cerrarCelda()"><div class="box"><h3 id="cal-t">Detalle</h3><div style="font-size:12px;color:#5a6478">Actividades que forman este monto.</div><div id="cal-list"></div><div style="text-align:right;margin-top:12px"><button class="btn btn-s" onclick="cerrarCelda()">Cerrar</button></div></div></div>
 <div id="rd-mo" onclick="if(event.target===this)cerrarPend()"><div class="box"><h3>Pendientes de alta desde el Radar</h3><div style="font-size:12px;color:#5a6478">Médicos que marcaste en el Radar y no tienen ficha aquí. Dalos de alta con el formulario de profesional; ahí completas la institución.</div><div id="rd-list"></div><div style="text-align:right;margin-top:12px"><button class="btn btn-s" onclick="cerrarPend()">Cerrar</button></div></div></div>
 <div id="ct-mo" onclick="if(event.target===this)cerrarContacto()"><div class="box">
   <h3 id="ct-t">Agregar profesional de salud</h3>
@@ -2328,14 +2336,14 @@ function partidasPlan(p,anio){
   TACTICAS.forEach(function(t){
     var v=p[t.id];if(!v||!v.activo||t.id==='mesa')return;
     var m=num(v.monto);if(!m)return;
-    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual});return;}
-    if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:cAnual});return;}
+    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual,det:v.producto||''});return;}
+    if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:cAnual,det:v.piezas||''});return;}
     if(t.id==='patrocinio'){var e=eventoDe(v),f=fechaPat(v);
-      out.push({tipo:'patrocinio',monto:m,fecha:f,c:clasifica(f,(e&&e.anio)||pa,anio)});return;}
-    out.push({tipo:t.id,monto:m,fecha:v.fecha||'',c:clasifica(v.fecha,pa,anio)});
+      out.push({tipo:'patrocinio',monto:m,fecha:f,c:clasifica(f,(e&&e.anio)||pa,anio),det:e?e.nombre:(v.evento||v.evento_txt||'')});return;}
+    out.push({tipo:t.id,monto:m,fecha:v.fecha||'',c:clasifica(v.fecha,pa,anio),det:v.tema||''});
   });
   (p.solicitudes||[]).forEach(function(x){var m=num(x.monto);
-    if(m)out.push({tipo:'sol',monto:m,fecha:x.fecha||'',c:clasifica(x.fecha,pa,anio)});});
+    if(m)out.push({tipo:'sol',monto:m,fecha:x.fecha||'',c:clasifica(x.fecha,pa,anio),det:x.concepto||''});});
   return out;
 }
 
@@ -2547,16 +2555,17 @@ function calendarioPresu(anio){
   var modo=$('p-modo')?$('p-modo').value:'resp';
   var R={};
   function fila(mr){
-    if(!R[mr])R[mr]={mr:mr,m:new Array(12).fill(0),sf:0,total:0};
+    if(!R[mr])R[mr]={mr:mr,m:new Array(12).fill(0),sf:0,total:0,it:[]};
     return R[mr];
   }
   var pf=paisPresu();
   MRS.filter(mrEnPais).forEach(fila);
-  function poner(mr,fecha,monto,rec){
+  /* it: cada partida con su mes (0-11, -1 = sin mes, 'rec' = los doce meses) */
+  function poner(mr,fecha,monto,rec,info){
     if(!monto)return;
-    var f=fila(mr);
+    var f=fila(mr),mi=rec?'rec':mesDe(fecha);
+    f.it.push(Object.assign({mes:mi,fecha:fecha||'',monto:monto},info||{}));
     if(rec){for(var i=0;i<12;i++)f.m[i]+=monto/12;f.total+=monto;return;}
-    var mi=mesDe(fecha);
     if(mi<0){f.sf+=monto;f.total+=monto;return;}
     f.m[mi]+=monto;f.total+=monto;
   }
@@ -2564,22 +2573,55 @@ function calendarioPresu(anio){
     var k=en[0];
     if(pf&&planPais(k)!==pf)return;
     var mr=k.split('||')[0];
-    partidasPlan(en[1],anio).forEach(function(x){if(x.c==='si')poner(mr,x.fecha,x.monto,x.rec);});
+    partidasPlan(en[1],anio).forEach(function(x){if(x.c==='si')poner(mr,x.fecha,x.monto,x.rec,
+      {tipo:x.tipo,quien:k.split('||')[1],det:x.det||'',ir:'irPlan(\''+jsq(k)+'\')'});});
   });
   MESAS.forEach(function(m){
     if(clasifica(m.fecha,null,anio)!=='si')return;
-    var rep=repartir(m,num(m.monto),modo);
-    Object.keys(rep).filter(mrEnPais).forEach(function(mr){poner(mr,m.fecha,rep[mr],false);});
+    var rep=repartir(m,num(m.monto),modo),n=(m.invitados||[]).length;
+    Object.keys(rep).filter(mrEnPais).forEach(function(mr){poner(mr,m.fecha,rep[mr],false,
+      {tipo:'mesa',quien:(m.sede||'Mesa redonda')+' · '+n+' invitado'+(n===1?'':'s'),det:m.tema||'',
+       parte:rep[mr]<num(m.monto)?num(m.monto):0,ir:'vista(\'mesas\');abrirMesa(\''+jsq(m.id)+'\')'});});
   });
   SUMMITS.forEach(function(s){
     if(clasifica(s.fecha_ini,null,anio)!=='si')return;
-    var rep=repartir(s,totalSummit(s),modo);
-    Object.keys(rep).filter(mrEnPais).forEach(function(mr){poner(mr,s.fecha_ini,rep[mr],false);});
+    var rep=repartir(s,totalSummit(s),modo),n=(s.invitados||[]).length;
+    Object.keys(rep).filter(mrEnPais).forEach(function(mr){poner(mr,s.fecha_ini,rep[mr],false,
+      {tipo:'summit',quien:(s.nombre||s.destino||'Summit')+' · '+n+' invitado'+(n===1?'':'s'),det:s.destino||'',
+       parte:rep[mr]<totalSummit(s)?totalSummit(s):0,ir:'vista(\'summits\');abrirSummit(\''+jsq(s.id)+'\')'});});
   });
   return Object.keys(R).map(function(k){return R[k];})
     .filter(function(f){return f.total;})
     .sort(function(a,b){return b.total-a.total;});
 }
+
+var CAL_ULT=null;
+var CAL_TIPO={patrocinio:'Patrocinio',oneone:'One to one',mm:'Muestras m\u00e9dicas',material:'Material',sol:'Solicitud puntual',mesa:'Mesa redonda',summit:'Summit local'};
+/* i = fila (-1 = todos los visitadores); mes = 0-11, -1 sin mes, 'tot' todo el año */
+function verCelda(i,mes){
+  if(!CAL_ULT)return;
+  var filas=i<0?CAL_ULT.L:[CAL_ULT.L[i]],it=[];
+  filas.forEach(function(f){f.it.forEach(function(x){
+    var ok=mes==='tot'||x.mes===mes||(x.mes==='rec'&&mes!==-1);
+    if(!ok)return;
+    var m=(x.mes==='rec'&&mes!=='tot')?x.monto/12:x.monto;
+    it.push(Object.assign({},x,{mr:f.mr,ver:m}));
+  });});
+  it.sort(function(a,b){return (a.fecha||'9')<(b.fecha||'9')?-1:(a.fecha||'9')>(b.fecha||'9')?1:b.ver-a.ver;});
+  var tot=it.reduce(function(a,x){return a+x.ver;},0);
+  var cuando=mes==='tot'?'todo '+CAL_ULT.anio:mes===-1?'sin mes ('+CAL_ULT.anio+')':MESES[mes]+' '+CAL_ULT.anio;
+  $('cal-t').textContent=(i<0?'Todos los visitadores':CAL_ULT.L[i].mr)+' · '+cuando;
+  $('cal-list').innerHTML=it.map(function(x){
+    return '<div class="it"><div class="t"><b>'+esc(CAL_TIPO[x.tipo]||x.tipo)+'</b> &middot; '+esc(x.quien||'')
+      +'<small>'+(i<0?esc(x.mr)+' &middot; ':'')+(x.fecha?fDia(x.fecha):(x.mes==='rec'?'Mensual (costo anual / 12)':'Sin fecha'))
+      +(x.det?' &middot; '+esc(x.det):'')
+      +(x.parte?' &middot; parte de '+fmtUSD(x.parte)+' (prorrateado)':'')+'</small></div>'
+      +'<b style="white-space:nowrap">'+fmtUSD(x.ver)+'</b>'
+      +'<button class="btn btn-s" style="padding:3px 9px;font-size:10.5px" onclick="cerrarCelda();'+x.ir+'">Abrir</button></div>';
+  }).join('')+'<div class="it" style="font-weight:800;color:#0033A1"><div class="t">Total</div><b>'+fmtUSD(tot)+'</b><span style="width:52px"></span></div>';
+  $('cal-mo').style.display='flex';
+}
+function cerrarCelda(){$('cal-mo').style.display='none';}
 
 function tablaCalendario(anio){
   if(!anio)return '<div class="lect" style="margin-top:16px">Elige un a&ntilde;o para ver el calendario de desembolsos mes a mes.</div>';
@@ -2588,12 +2630,13 @@ function tablaCalendario(anio){
   var tm=new Array(12).fill(0),tsf=0,tt=0;
   L.forEach(function(f){for(var i=0;i<12;i++)tm[i]+=f.m[i];tsf+=f.sf;tt+=f.total;});
   var pico=Math.max.apply(null,tm);
-  var cel=function(v){return v?fmtUSD(v):'<span class="pz">—</span>';};
-  var filas=L.map(function(f){
+  CAL_ULT={anio:anio,L:L};
+  var cel=function(v,i,mes){return v?'<span class="clk" onclick="verCelda('+i+','+JSON.stringify(mes).replace(/"/g,'&quot;')+')">'+fmtUSD(v)+'</span>':'<span class="pz">—</span>';};
+  var filas=L.map(function(f,i){
     return '<tr><td>'+esc(f.mr)+'</td>'
-      +f.m.map(function(v){return '<td>'+cel(v)+'</td>';}).join('')
-      +'<td class="sf">'+cel(f.sf)+'</td>'
-      +'<td style="font-weight:700;color:var(--azul)">'+fmtUSD(f.total)+'</td></tr>';
+      +f.m.map(function(v,mi){return '<td>'+cel(v,i,mi)+'</td>';}).join('')
+      +'<td class="sf">'+cel(f.sf,i,-1)+'</td>'
+      +'<td style="font-weight:700;color:var(--azul)">'+cel(f.total,i,'tot')+'</td></tr>';
   }).join('');
   return '<div class="ptit">CALENDARIO DE DESEMBOLSOS &middot; '+anio+'</div>'
    +'<div class="cal-wrap2"><table class="ctab"><thead><tr><th>Visitador</th>'
@@ -2601,9 +2644,9 @@ function tablaCalendario(anio){
    +'<th class="sf">Sin mes</th><th>TOTAL</th></tr></thead>'
    +'<tbody>'+filas+'</tbody>'
    +'<tfoot><tr><td>Total</td>'
-   +tm.map(function(v){return '<td>'+fmtUSD(v)+(pico?'<div class="mini"><i style="width:'+Math.round(v/pico*100)+'%"></i></div>':'')+'</td>';}).join('')
+   +tm.map(function(v,mi){return '<td>'+(v?'<span class="clk" onclick="verCelda(-1,'+mi+')">'+fmtUSD(v)+'</span>':fmtUSD(v))+(pico?'<div class="mini"><i style="width:'+Math.round(v/pico*100)+'%"></i></div>':'')+'</td>';}).join('')
    +'<td class="sf">'+fmtUSD(tsf)+'</td><td>'+fmtUSD(tt)+'</td></tr></tfoot></table></div>'
-   +'<div class="lect" style="margin-top:12px">Cada partida cae en el mes de su fecha. '
+   +'<div class="lect" style="margin-top:12px"><b>Toca cualquier monto</b> para ver las actividades que lo forman. Cada partida cae en el mes de su fecha. '
    +'Las <b>muestras m&eacute;dicas</b> son un gasto recurrente y se reparten en los doce meses. '
    +'<b>Sin mes</b> agrupa lo que cuenta en '+anio+' pero a&uacute;n no tiene d&iacute;a: el material promocional '
    +'y los patrocinios de eventos que solo tienen el a&ntilde;o.</div>';
