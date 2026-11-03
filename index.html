@@ -161,6 +161,8 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 
 .navb{background:var(--azul75);display:flex;gap:0;padding:0 18px;overflow-x:auto;scrollbar-width:none}
 .navb .nv{white-space:nowrap;flex-shrink:0}
+.nv-an{margin-left:auto;display:flex;align-items:center;gap:7px;color:#fff;font-size:11.5px;font-weight:700;white-space:nowrap;padding:5px 0 5px 14px;flex-shrink:0}
+.nv-an select{background:#fff;color:#0033A1;font-weight:800;font-size:13px;padding:4px 8px;border-radius:6px;border:0}
 .nv{padding:9px 16px;font-size:12px;font-weight:600;color:#cfd9ef;cursor:pointer;
   border-bottom:3px solid transparent;display:flex;align-items:center;gap:7px}
 .nv:hover{color:#fff}
@@ -403,15 +405,13 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   <div class="nv" id="nv-mesas" onclick="vista('mesas')">&#127908; Mesas redondas <span class="nvc" id="nv-mc">0</span></div>
   <div class="nv" id="nv-summits" onclick="vista('summits')">&#9968; Summits locales <span class="nvc" id="nv-sc">0</span></div>
   <div class="nv" id="nv-presu" onclick="vista('presu')">&#128176; Presupuesto</div>
+  <label class="nv-an">Plan del a&ntilde;o <select id="f-anio" onchange="cambiaAnio(this.value)"><option></option></select></label>
 </div>
 
 <div id="v-planes">
 <div class="mrbar">
   <label>Visitador
     <select id="f-mr" onchange="pickMR()"><option value="">Selecciona tu nombre…</option></select>
-  </label>
-  <label>A&ntilde;o
-    <select id="f-anio" onchange="cambiaAnio(this.value)"><option value="">Todos</option></select>
   </label>
   <label>Segmento
     <select id="f-seg" onchange="renderList()">
@@ -648,7 +648,51 @@ var CATSOL=[
 var ESTSOL=[['solicitado','Solicitado'],['aprobado','Aprobado'],['entregado','Entregado']];
 
 var MRS=[],cur=null,PLANES={};
-try{PLANES=JSON.parse(localStorage.getItem('nb_planes')||'{}');}catch(e){PLANES={};}
+/* ── Planes por año ──────────────────────────────────────────
+   Cada médico tiene un plan por año (fila de la tabla planes con
+   medico_key + anio). PLANES_DB los guarda todos por "clave@año";
+   PLANES es la vista del año elegido, por clave de médico, que es
+   lo que usa el resto de la app. Un plan sin año (anterior a la
+   separación y sin ninguna fecha) se ve en cualquier año hasta que
+   se guarda: entonces queda en el año elegido. */
+var PLANES_DB={};
+var ANIO_PLAN=String(new Date().getFullYear());
+try{var _a=localStorage.getItem('nb_anio');if(/^\d{4}$/.test(_a||''))ANIO_PLAN=_a;}catch(e){}
+try{PLANES_DB=JSON.parse(localStorage.getItem('nb_planes_anio')||'{}')||{};}catch(e){PLANES_DB={};}
+function pkDe(k,a){return k+'@'+(a||'');}
+function kDePk(pk){return pk.slice(0,pk.lastIndexOf('@'));}
+function vistaAnio(a){
+  var v={},sin={};
+  Object.keys(PLANES_DB).forEach(function(pk){
+    var pl=PLANES_DB[pk],k=kDePk(pk);
+    if(pl.__anio===a)v[k]=pl;else if(!pl.__anio)sin[k]=pl;
+  });
+  Object.keys(sin).forEach(function(k){if(!v[k])v[k]=sin[k];});
+  return v;
+}
+function rehacerVista(){PLANES=vistaAnio(ANIO_PLAN);}
+function guardaLocal(){try{localStorage.setItem('nb_planes_anio',JSON.stringify(PLANES_DB));}catch(e){}}
+function ponerPlan(k,pl,prev){
+  if(prev)Object.keys(PLANES_DB).forEach(function(pk){if(PLANES_DB[pk]===prev)delete PLANES_DB[pk];});
+  PLANES_DB[pkDe(k,pl.__anio)]=pl;guardaLocal();rehacerVista();
+}
+function quitarPlan(pl){
+  Object.keys(PLANES_DB).forEach(function(pk){if(PLANES_DB[pk]===pl)delete PLANES_DB[pk];});
+  guardaLocal();rehacerVista();
+}
+/* Planes del mismo médico en otros años (para avisar y copiar) */
+function otrosPlanes(k){
+  return Object.keys(PLANES_DB).filter(function(pk){
+    var pl=PLANES_DB[pk];return kDePk(pk)===k&&pl.__anio&&pl.__anio!==ANIO_PLAN;
+  }).map(function(pk){return PLANES_DB[pk];}).sort(function(a,b){return a.__anio<b.__anio?-1:1;});
+}
+function tienePlanAlguno(k){return Object.keys(PLANES_DB).some(function(pk){return kDePk(pk)===k;});}
+/* Entradas [clave, plan] para Presupuesto: un año, o todos sin repetir */
+function planesPresu(anio){
+  if(anio){var v=vistaAnio(anio);return Object.keys(v).map(function(k){return [k,v[k]];});}
+  return Object.keys(PLANES_DB).map(function(pk){return [kDePk(pk),PLANES_DB[pk]];});
+}
+rehacerVista();
 
 function $(id){return document.getElementById(id);}
 function key(d){if(d.k===undefined){var nk=d.mr+'||'+d.n;d.k=LEGACY[nk]||nk;}return d.k;}
@@ -863,7 +907,8 @@ function renderList(){
   cntOO();
   $('k-inv').textContent=mr?fmtUSD(inv):'—';
   var li=$('k-inv').parentNode.querySelector('.l');
-  if(li)li.textContent=anio?'inversión '+anio:'inversión planificada';
+  if(li)li.textContent='inversión '+anio;
+  var lp=$('k-pl').parentNode.querySelector('.l');if(lp)lp.textContent='con plan '+anio;
   if(!mr){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center;line-height:1.6">Selecciona tu nombre en el men&uacute; de arriba<br>para ver tu cartera de m&eacute;dicos.</div>';return;}
   if(!d.length){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center">Ning&uacute;n m&eacute;dico con estos filtros.</div>';return;}
   $('lista').innerHTML=d.map(function(x){
@@ -873,7 +918,7 @@ function renderList(){
       +'<div class="chk">'+(tiene?'&#10003;':'')+'</div>'
       +'<div class="dt"><div class="dn">'+esc(x.n)
         +(x.contacto?' <span class="tag-ct">'+CT_TIPO_CORTO[x.contacto.tipo]+'</span>':(x.sin_datos?' <span class="tag-sd">SIN ENCUESTA</span>':''))
-        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+(radarPend(k)?' <span class="tag-rd">RADAR</span>':'')+'</div>'
+        +(x.fuera_maestro?' <span class="tag-fm">FUERA CRM</span>':'')+tagAnioFila(k)+(radarPend(k)?' <span class="tag-rd">RADAR</span>':'')+'</div>'
       +'<div class="dm">'+(esGlob(mr)?'<b>'+esc(x.mr)+'</b> &middot; ':'')+esc(x.esp)+' &middot; '+(x.ciudad?esc(x.ciudad)+' &middot; ':'')
         +(x.contacto?esc(x.contacto.institucion):(x.sin_datos?'sin datos de encuesta':'Seg. '+x.seg))+'</div></div>'
       +'<div class="dr">'+(x.contacto?'':'<span class="tier tT'+x.tier.replace('TIER ','')+'">'+x.tier.replace('TIER ','T')+'</span>')
@@ -966,7 +1011,7 @@ function renderDetalle(){
   }).join('');
 
   $('detalle').innerHTML=
-   '<div class="dhead"><div><h2>'+esc(d.n)+'</h2>'
+   '<div class="dhead"><div><h2>'+esc(d.n)+' <span class="pill" style="font-size:11px;vertical-align:middle;background:#0033A1;color:#fff">Plan '+ANIO_PLAN+'</span></h2>'
    +'<div class="dsub">'+esc(d.esp)+' &middot; '+(d.ciudad?esc(d.ciudad)+', ':'')+esc(d.pais)
      +(d.sin_datos?'':' &middot; Score '+(d.score||0).toFixed(1))+'</div>'
    +'<div class="pills">'
@@ -981,6 +1026,7 @@ function renderDetalle(){
    +(d.adhoc?'<span class="pill" style="background:#e8f0fd;color:#1552b8">'+esc(d.adhoc)+'</span>':'')
    +'</div></div></div>'
 
+   +avisoAnio(d)
    +(d.contacto?'<div class="diag"><div class="lect">'+lectura(d)+'</div></div>'
      :bloquePatron(d)
    +'<div class="diag"><h3>MEZCLA DE PRESCRIPCI&Oacute;N SEMANAL</h3>'
@@ -1008,8 +1054,8 @@ function renderDetalle(){
    +(guardado?'Actualizado '+esc(guardado.fecha||''):'Sin guardar')+'</div>'
    +'<div style="display:flex;gap:9px;align-items:center">'
    +'<span class="tot" id="tot">'+txtTotal(p)+'</span>'
-   +(guardado?'<button class="btn btn-s" onclick="borrar()">Eliminar plan</button>':'')
-   +'<button class="btn btn-g" onclick="guardar()">Guardar plan</button></div></div>';
+   +(guardado?'<button class="btn btn-s" onclick="borrar()">Eliminar plan'+(guardado.__anio?' '+guardado.__anio:'')+'</button>':'')
+   +'<button class="btn btn-g" onclick="guardar()">Guardar plan '+ANIO_PLAN+'</button></div></div>';
 
   actualizarTotal();
 }
@@ -1050,7 +1096,7 @@ function renderDetalleSoftKeep(){var d=DRAFT;renderDetalle();DRAFT=d;
   // repintar selects con el tema puesto
   var sc=document.querySelector('.detail').scrollTop;
   PLANES[key(cur)]=PLANES[key(cur)];
-  var tmp=PLANES[key(cur)];PLANES[key(cur)]=DRAFT;renderDetalle();PLANES[key(cur)]=tmp;DRAFT=d;
+  var tmp=PLANES[key(cur)];PLANES[key(cur)]=DRAFT;renderDetalle();if(tmp)PLANES[key(cur)]=tmp;else delete PLANES[key(cur)];DRAFT=d;
   document.querySelector('.detail').scrollTop=sc;}
 /* Solicitudes puntuales: entradas sueltas que el médico pide
    durante el año — juguetes, refrigerios, material. Se registran
@@ -1128,17 +1174,18 @@ function guardar(){
   if(!cur)return;
   DRAFT.fecha=new Date().toLocaleDateString('es-HN');
   var limpio=JSON.parse(JSON.stringify(DRAFT));delete limpio.__k;
-  PLANES[key(cur)]=limpio;
-  try{localStorage.setItem('nb_planes',JSON.stringify(PLANES));}catch(e){}
-  pushPlan(key(cur),PLANES[key(cur)]);
+  var prev=PLANES[key(cur)]||null;
+  limpio.__id=prev?prev.__id:undefined;limpio.__anio=ANIO_PLAN;
+  ponerPlan(key(cur),limpio,prev);
+  pushPlan(key(cur),limpio);
   toast(ONLINE?'Plan guardado y compartido':'Plan guardado solo en este equipo');renderList();renderDetalle();
 }
 function borrar(){
   if(!cur)return;
-  if(!confirm('¿Eliminar el plan de '+cur.n+'?'))return;
-  delPlan(key(cur));
-  delete PLANES[key(cur)];
-  try{localStorage.setItem('nb_planes',JSON.stringify(PLANES));}catch(e){}
+  var pl=PLANES[key(cur)];if(!pl)return;
+  if(!confirm('¿Eliminar el plan '+(pl.__anio||'sin año')+' de '+cur.n+'? Los planes de otros años no se tocan.'))return;
+  delPlan(key(cur),pl);
+  quitarPlan(pl);
   toast('Plan eliminado');DRAFT=null;renderList();renderDetalle();
 }
 
@@ -1195,7 +1242,7 @@ function exportar(){
     wsS['!cols']=[{wch:18},{wch:26},{wch:12},{wch:42},{wch:22},{wch:13},{wch:11}];
     XLSX.utils.book_append_sheet(wb,wsS,'Solicitudes');
   }
-  XLSX.writeFile(wb,'Plan_Accion_'+(esGlob(mr)?VISTAS_GLOB[mr].f:mr.replace(/\s+/g,'_'))+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  XLSX.writeFile(wb,'Plan_Accion_'+ANIO_PLAN+'_'+(esGlob(mr)?VISTAS_GLOB[mr].f:mr.replace(/\s+/g,'_'))+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
   toast('Excel generado');
 }
 
@@ -1292,7 +1339,8 @@ function planVacio(){
   var o={};TACTICAS.forEach(function(t){o[t.id]={activo:false};});
   o.objetivo='';o.notas='';o.solicitudes=[];return o;
 }
-function anioPlan(){return String(new Date().getFullYear()+1);}
+function anioPlan(){return ANIO_PLAN;}
+function anioEv(e){return e.fecha?String(e.fecha).slice(0,4):(e.anio?String(e.anio):'');}
 
 /* ── Bloques dentro del plan del médico ───────────────────── */
 function bloquePatrocinio(st,d){
@@ -1457,11 +1505,12 @@ function irPlan(k){
 
 /* ── Escribir en el plan de un médico desde otra pestaña ──── */
 function guardaPlanDe(k,fn){
-  var p=PLANES[k]?JSON.parse(JSON.stringify(PLANES[k])):planVacio();
+  var prev=PLANES[k]||null;
+  var p=prev?JSON.parse(JSON.stringify(prev)):planVacio();
   fn(p);
   p.fecha=new Date().toLocaleDateString('es-HN');
-  PLANES[k]=p;
-  try{localStorage.setItem('nb_planes',JSON.stringify(PLANES));}catch(e){}
+  p.__id=prev?prev.__id:undefined;p.__anio=ANIO_PLAN;
+  ponerPlan(k,p,prev);
   pushPlan(k,p);
   if(cur&&key(cur)===k&&!DIRTY){DRAFT=null;}
 }
@@ -1490,11 +1539,12 @@ function nuevoEvento(){
 function renderEventos(){
   var est=$('e-est').value,mr=$('e-mr').value,pa=$('e-pais').value;
   var L=EVENTOS.filter(function(e){
+    if(anioEv(e)&&anioEv(e)!==ANIO_PLAN&&e.id!==curE)return false;
     if(est&&estadoFecha(e.fecha)!==est)return false;
     if(mr||pa){var a=asistentes(e).filter(filtroPyo);if(!a.length&&e.id!==curE)return false;}
     return true;
   });
-  $('nv-ec').textContent=EVENTOS.length;
+  $('nv-ec').textContent=EVENTOS.filter(function(e){return !anioEv(e)||anioEv(e)===ANIO_PLAN;}).length;
   var tot=L.reduce(function(a,e){return a+asistentes(e).filter(filtroPyo).reduce(function(s,k){return s+num(PLANES[k].patrocinio.monto);},0);},0);
   $('e-cnt').textContent=L.length+' evento'+(L.length===1?'':'s')+' · '+fmtUSD(tot);
   if(!L.length){$('e-lista').innerHTML='<div class="vacio">Sin eventos con estos filtros.<br>Crea uno con el bot&oacute;n de arriba.</div>';return;}
@@ -2272,18 +2322,20 @@ function clasifica(fecha,anioAlt,anio){
   return a===anio?'si':'no';
 }
 function partidasPlan(p,anio){
-  var out=[];
+  var out=[],pa=p.__anio||'';
+  /* muestras y material: en el año del plan; si el plan no tiene año, en cualquiera */
+  var cAnual=(!anio||!pa||pa===anio)?'si':'no';
   TACTICAS.forEach(function(t){
     var v=p[t.id];if(!v||!v.activo||t.id==='mesa')return;
     var m=num(v.monto);if(!m)return;
-    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:'si'});return;}
-    if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:'si'});return;}
+    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual});return;}
+    if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:cAnual});return;}
     if(t.id==='patrocinio'){var e=eventoDe(v),f=fechaPat(v);
-      out.push({tipo:'patrocinio',monto:m,fecha:f,c:clasifica(f,e&&e.anio,anio)});return;}
-    out.push({tipo:t.id,monto:m,fecha:v.fecha||'',c:clasifica(v.fecha,null,anio)});
+      out.push({tipo:'patrocinio',monto:m,fecha:f,c:clasifica(f,(e&&e.anio)||pa,anio)});return;}
+    out.push({tipo:t.id,monto:m,fecha:v.fecha||'',c:clasifica(v.fecha,pa,anio)});
   });
   (p.solicitudes||[]).forEach(function(x){var m=num(x.monto);
-    if(m)out.push({tipo:'sol',monto:m,fecha:x.fecha||'',c:clasifica(x.fecha,null,anio)});});
+    if(m)out.push({tipo:'sol',monto:m,fecha:x.fecha||'',c:clasifica(x.fecha,pa,anio)});});
   return out;
 }
 
@@ -2298,9 +2350,10 @@ function datosPresu(anio){
   var pf=paisPresu();
   MRS.filter(mrEnPais).forEach(fila);
 
-  Object.keys(PLANES).forEach(function(k){
+  planesPresu(anio).forEach(function(en){
+    var k=en[0];
     if(pf&&planPais(k)!==pf)return;
-    var p=PLANES[k],f=fila(k.split('||')[0]);
+    var p=en[1],f=fila(k.split('||')[0]);
     f.medicos++;
     partidasPlan(p,anio).forEach(function(x){
       if(x.c==='sinf'){f.sinf+=x.monto;return;}
@@ -2359,8 +2412,8 @@ function anioDe(f){
 function aniosDisponibles(){
   var set={};
   function add(a){if(a&&String(a).length===4)set[String(a)]=1;}
-  Object.keys(PLANES).forEach(function(k){
-    var p=PLANES[k];
+  Object.keys(PLANES_DB).forEach(function(pk){
+    var p=PLANES_DB[pk];add(p.__anio);
     TACTICAS.forEach(function(t){
       var v=p[t.id];if(!v||!v.activo)return;
       if(t.id==='patrocinio'){var e=eventoDe(v),f=fechaPat(v);add(f?anioDe(f):(e&&e.anio));}
@@ -2385,26 +2438,37 @@ function anioPorDefecto(anios){
    Muestras y material son anuales y cuentan en cualquier año. */
 /* renderList corre una vez antes de que existan MESAS, SUMMITS y EVENTOS */
 function datosListos(){return Array.isArray(MESAS)&&Array.isArray(SUMMITS)&&Array.isArray(EVENTOS);}
-function anioVista(){
-  if(!datosListos())return ANIO_SEL!==undefined?ANIO_SEL:String(new Date().getFullYear());
-  var anios=aniosDisponibles();
-  if(ANIO_SEL===undefined&&Object.keys(PLANES).length)ANIO_SEL=anioPorDefecto(anios);
-  var a=ANIO_SEL===undefined?String(new Date().getFullYear()):ANIO_SEL;
-  if(a&&anios.indexOf(a)===-1)a=anios[anios.length-1];
-  return a;
-}
+function anioVista(){return ANIO_PLAN;}
 function enAnio(a){var s=anioVista();return !s||a==='anual'||a===s;}
 function pintaAnioPlanes(){
   var sel=$('f-anio');if(!sel||!datosListos())return;
-  var anios=aniosDisponibles(),a=anioVista();
-  sel.innerHTML='<option value=""'+(a===''?' selected':'')+'>Todos</option>'
-    +anios.map(function(x){return '<option'+(x===a?' selected':'')+'>'+x+'</option>';}).join('');
+  var anios=aniosDisponibles();
+  if(anios.indexOf(ANIO_PLAN)===-1){anios.push(ANIO_PLAN);anios.sort();}
+  sel.innerHTML=anios.map(function(x){return '<option'+(x===ANIO_PLAN?' selected':'')+'>'+x+'</option>';}).join('');
   var o=$('f-est')&&$('f-est').querySelector('option[value="anio"]');
-  if(o)o.textContent=a?'Con actividad en '+a:'Con actividad con fecha';
+  if(o)o.textContent='Con actividad en '+ANIO_PLAN;
+  var oc=$('f-est')&&$('f-est').querySelector('option[value="con"]');
+  if(oc)oc.textContent='Con plan '+ANIO_PLAN;
+  var os=$('f-est')&&$('f-est').querySelector('option[value="sin"]');
+  if(os)os.textContent='Sin plan '+ANIO_PLAN;
 }
+function cambiosSinGuardar(){
+  if(!cur||!DRAFT)return false;
+  var g=PLANES[key(cur)];if(!g)return false;
+  var a=JSON.parse(JSON.stringify(DRAFT));delete a.__k;
+  return JSON.stringify(a)!==JSON.stringify(g);
+}
+/* v vacío = "Todos los años", solo existe en Presupuesto */
 function cambiaAnio(v){
-  ANIO_SEL=v;renderList();
-  if(cur&&DRAFT)renderDetalleSoftKeep();
+  if(v&&v!==ANIO_PLAN){
+    if(cambiosSinGuardar()&&!confirm('Tienes cambios sin guardar en el plan '+ANIO_PLAN+' de '+cur.n+'. ¿Cambiar de año y descartarlos?')){pintaAnioPlanes();refrescaPresu();return;}
+    ANIO_PLAN=v;try{localStorage.setItem('nb_anio',v);}catch(e){}
+    rehacerVista();DRAFT=null;NUEVO_EV=false;NUEVA_MESA=false;
+  }
+  ANIO_SEL=v;
+  renderList();
+  if(cur)renderDetalle();
+  if($('v-pyo')&&$('v-pyo').style.display!=='none')renderPyo();
   refrescaPresu();
 }
 /* Año de una táctica: 'anual', 'AAAA', '' (sin fecha) o null (no aplica) */
@@ -2445,9 +2509,37 @@ function filaAnio(k,anio){
     +(n?'&#128197; '+n+(m?' &middot; ':''):'')+(m?fmtUSD(m):'')+'</div>';
 }
 function txtTotal(p){
-  var anio=anioVista(),t=fmtUSD(totalPlan(p));
-  if(!anio)return t+' total';
-  return fmtUSD(invAnio(p,anio))+' en '+anio+' <small>&middot; '+t+' total del plan</small>';
+  var a=ANIO_PLAN,en=invAnio(p,a),fuera=totalPlan(p)-en;
+  return 'Plan '+a+': '+fmtUSD(en)+(fuera>0?' <small>&middot; '+fmtUSD(fuera)+' con fecha de otro a&ntilde;o</small>':'');
+}
+/* Aviso arriba del plan: sin año, o tiene plan en otro año */
+function avisoAnio(d){
+  var k=key(d),g=PLANES[k],otros=otrosPlanes(k),h='';
+  if(g&&!g.__anio)h='<b>Este plan no tiene a&ntilde;o asignado</b> (se hizo antes de separar los planes por a&ntilde;o). '
+    +'Se muestra en todos los a&ntilde;os; al guardarlo queda como <b>plan '+ANIO_PLAN+'</b>.';
+  else if(!g&&otros.length)h='<b>Sin plan '+ANIO_PLAN+'.</b> Tiene plan '+otros.map(function(o){return o.__anio;}).join(' y ')+'. '
+    +otros.map(function(o){return '<button class="btn btn-s" style="padding:3px 9px;font-size:10.5px" onclick="cambiaAnio(\''+o.__anio+'\')">Ver plan '+o.__anio+'</button> '
+      +'<button class="btn btn-s" style="padding:3px 9px;font-size:10.5px" onclick="copiarPlan(\''+o.__anio+'\')">Usar plan '+o.__anio+' como base</button>';}).join(' ');
+  else if(g&&otros.length)h='Plan <b>'+ANIO_PLAN+'</b>. Tambi&eacute;n tiene plan '+otros.map(function(o){
+    return '<a style="cursor:pointer;text-decoration:underline" onclick="cambiaAnio(\''+o.__anio+'\')">'+o.__anio+'</a>';}).join(' y ')+'.';
+  if(!h)return '';
+  return '<div class="sec" style="border-color:#c7d6f3;background:#f3f7fe"><div class="sec-b" style="font-size:12px;line-height:1.7">'+h+'</div></div>';
+}
+/* Copia la estructura de otro año sin fechas, eventos ni solicitudes */
+function copiarPlan(a){
+  var o=otrosPlanes(key(cur)).filter(function(x){return x.__anio===a;})[0];if(!o)return;
+  var c=JSON.parse(JSON.stringify(o));
+  delete c.__id;c.__anio=ANIO_PLAN;c.solicitudes=[];delete c.fecha;
+  TACTICAS.forEach(function(t){var v=c[t.id];if(!v)return;
+    delete v.fecha;if(t.id==='patrocinio'){delete v.evento;delete v.evento_id;delete v.evento_txt;}});
+  c.__k=key(cur);DRAFT=c;tocar();repintar();
+  toast('Copiado como borrador del plan '+ANIO_PLAN+': revisa y guarda');
+}
+function tagAnioFila(k){
+  var g=PLANES[k];
+  if(g&&!g.__anio)return ' <span class="tag-sd">SIN A&Ntilde;O</span>';
+  if(!g){var o=otrosPlanes(k);if(o.length)return ' <span class="tag-an fuera" style="font-size:8.5px;padding:1px 5px">PLAN '+o.map(function(x){return x.__anio;}).join('·')+'</span>';}
+  return '';
 }
 
 function calendarioPresu(anio){
@@ -2468,10 +2560,11 @@ function calendarioPresu(anio){
     if(mi<0){f.sf+=monto;f.total+=monto;return;}
     f.m[mi]+=monto;f.total+=monto;
   }
-  Object.keys(PLANES).forEach(function(k){
+  planesPresu(anio).forEach(function(en){
+    var k=en[0];
     if(pf&&planPais(k)!==pf)return;
     var mr=k.split('||')[0];
-    partidasPlan(PLANES[k],anio).forEach(function(x){if(x.c==='si')poner(mr,x.fecha,x.monto,x.rec);});
+    partidasPlan(en[1],anio).forEach(function(x){if(x.c==='si')poner(mr,x.fecha,x.monto,x.rec);});
   });
   MESAS.forEach(function(m){
     if(clasifica(m.fecha,null,anio)!=='si')return;
@@ -2520,7 +2613,7 @@ var TAC_PRESU=['patrocinio','oneone','mm','material'];
 function renderPresu(){
   var selA=$('p-anio');
   var anios=aniosDisponibles();
-  var actual=ANIO_SEL!==undefined?ANIO_SEL:anioPorDefecto(anios);
+  var actual=ANIO_SEL!==undefined?ANIO_SEL:ANIO_PLAN;
   if(actual&&anios.indexOf(actual)===-1)actual=anios[anios.length-1];
   selA.innerHTML='<option value=""'+(actual===''?' selected':'')+'>Todos los a&ntilde;os</option>'
     +anios.map(function(a){return '<option'+(a===actual?' selected':'')+'>'+a+'</option>';}).join('');
@@ -2645,8 +2738,8 @@ function exportPresu(){
 
   var HS=['Visitador','Médico','Fecha','Concepto','Categoría','Estado','US$'];
   var RS=[];
-  Object.keys(PLANES).forEach(function(k){
-    var pl=PLANES[k],part=k.split('||');
+  planesPresu(anio).forEach(function(en){
+    var pl=en[1],part=en[0].split('||');
     (pl.solicitudes||[]).forEach(function(x){
       if(anio&&clasifica(x.fecha,null,anio)!=='si')return;
       var c=CATSOL.filter(function(y){return y.k===x.cat;})[0];
@@ -2726,7 +2819,7 @@ function arrancar(){
 }
 function salir(){
   if(!confirm('¿Cerrar sesión en este equipo?'))return;
-  ['nb_planes','nb_mesas','nb_summits','nb_eventos'].forEach(function(k){try{localStorage.removeItem(k);}catch(_){}});
+  ['nb_planes','nb_planes_anio','nb_mesas','nb_summits','nb_eventos'].forEach(function(k){try{localStorage.removeItem(k);}catch(_){}});
   sb.auth.signOut().then(function(){location.reload();},function(){location.reload();});
 }
 
@@ -2749,7 +2842,8 @@ function cargarSolicitudes(){
 }
 function solBar(ref,pre){
   SOLPRE[ref]=pre;
-  var q=REQS[ref],activa=q&&['borrador','enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1;
+  /* las solicitudes creadas antes de separar los planes por año no llevan "@año" */
+  var q=REQS[ref]||(ref.indexOf('@')!==-1?REQS[ref.slice(0,ref.lastIndexOf('@'))]:null),activa=q&&['borrador','enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1;
   var rj=esc(ref).replace(/'/g,"\\'");
   var h='<div class="solbar">';
   if(q){var st=SOL_ST[q.status]||[q.status,''];
@@ -2774,12 +2868,12 @@ function instDe(d){return d&&d.contacto?d.contacto.institucion:'';}
 function paisMR(mr){var x=DATA.filter(function(z){return z.mr===mr&&z.pais;})[0];return x?x.pais:'';}
 function solTac(id,d,st){
   var obj=(DRAFT&&DRAFT.objetivo)?DRAFT.objetivo+'. ':'';
-  if(id==='oneone')return solBar('oneone:'+key(d),{tipo:'medicos',sub:'oneone',
+  if(id==='oneone')return solBar('oneone:'+key(d)+'@'+ANIO_PLAN,{tipo:'medicos',sub:'oneone',
     title:('One to one'+(st.tema?': '+st.tema:'')+' — '+d.n).slice(0,120),
     just:'Plan de Acción. '+obj+(st.tema?'Tema: '+st.tema+'. ':'')+'Sesión individual de actualización con '+d.n+'.',
     ben:d.n+(d.esp?' ('+d.esp+')':''),date:st.fecha||'',usd:num(st.monto),pais:d.pais||paisMR(d.mr),mr:d.mr,aud:audDe(d),inst:instDe(d)});
   var ev=eventoDe(st),nom=ev?ev.nombre:(st.evento||st.evento_txt||'evento');
-  return solBar('patrocinio:'+key(d),{tipo:'medicos',sub:'patrocinio',
+  return solBar('patrocinio:'+key(d)+'@'+ANIO_PLAN,{tipo:'medicos',sub:'patrocinio',
     title:('Patrocinio: '+nom+' — '+d.n).slice(0,120),
     just:'Plan de Acción. '+obj+'Patrocinio de '+d.n+' a '+nom+'.',
     ben:d.n+(d.esp?' ('+d.esp+')':''),date:fechaPat(st)||'',usd:num(st.monto),pais:d.pais||paisMR(d.mr),mr:d.mr,aud:audDe(d),inst:instDe(d)});
@@ -2828,7 +2922,7 @@ function guardarContacto(){
   if(!mr){toast('Elige el visitador responsable');return;}
   var row={nombre:nombre,tipo:$('ct-tipo').value,institucion:inst,area:$('ct-area').value.trim()||null,ciudad:$('ct-ciu').value.trim()||null,mr:mr,pais:paisMR(mr)||'Honduras',actualizado:new Date().toISOString()};
   var editando=CT_EDIT;
-  if(editando&&(editando.nombre!==nombre||editando.mr!==mr)&&PLANES[editando.mr+'||'+editando.nombre]){toast('Ya tiene plan: no cambies nombre ni visitador (crea otro registro)');return;}
+  if(editando&&(editando.nombre!==nombre||editando.mr!==mr)&&tienePlanAlguno(editando.mr+'||'+editando.nombre)){toast('Ya tiene plan: no cambies nombre ni visitador (crea otro registro)');return;}
   var q=editando?sb.from('contactos').update(row).eq('id',editando.id).select():sb.from('contactos').insert(row).select();
   q.then(function(r){
     if(r.error){toast(/duplicate|unique/i.test(r.error.message)?'Ya existe un profesional con ese nombre para ese visitador':'No se pudo guardar: '+r.error.message);return;}
@@ -2842,7 +2936,7 @@ function guardarContacto(){
 }
 function borrarContacto(){
   var c=CT_EDIT;if(!c)return;
-  if(PLANES[c.mr+'||'+c.nombre]&&!confirm('Este profesional tiene un plan guardado. ¿Quitarlo de la lista de todas formas? El plan queda guardado.'))return;
+  if(tienePlanAlguno(c.mr+'||'+c.nombre)&&!confirm('Este profesional tiene un plan guardado. ¿Quitarlo de la lista de todas formas? El plan queda guardado.'))return;
   if(!confirm('¿Quitar a '+c.nombre+' de la lista?'))return;
   sb.from('contactos').update({activo:false,actualizado:new Date().toISOString()}).eq('id',c.id).then(function(r){
     if(r.error){toast('No se pudo quitar');return;}
@@ -2861,20 +2955,15 @@ function cargarTodo(){
   ]).then(function(res){
     var p=res[0],m=res[1],u=res[2],ev=res[3];
     if(p.error||m.error){throw (p.error||m.error);}
-    PLANES={};
-    p.data.forEach(function(r){
-      var o=r.tacticas||{};
-      o.solicitudes=o.solicitudes||[];
-      o.objetivo=r.objetivo||'';o.notas=r.notas||'';
-      o.fecha=new Date(r.actualizado).toLocaleDateString('es-HN');
-      PLANES[r.medico_key]=o;
-    });
+    PLANES_DB={};
+    p.data.forEach(function(r){PLANES_DB[pkDe(r.medico_key,r.anio)]=dePlan(r);});
+    guardaLocal();rehacerVista();
     MESAS=m.data.map(deSB).sort(function(a,b){return b.id<a.id?-1:1;});
     if(!u.error)SUMMITS=u.data.map(deSummit).sort(function(a,b){return b.id<a.id?-1:1;});
     if(ev&&!ev.error){EVENTOS=ev.data.map(deEvento);saveEventos();}
     ONLINE=true;estado('Conectado','ok');
     renderList();renderMesas();renderSummits();refrescaPresu();
-    $('nv-ec').textContent=EVENTOS.length;
+    $('nv-ec').textContent=EVENTOS.filter(function(e){return !anioEv(e)||anioEv(e)===ANIO_PLAN;}).length;
     if($('v-pyo').style.display!=='none')renderPyo();
     if(curS&&S_())renderSummit();
     if(cur){DRAFT=null;renderDetalle();}
@@ -2885,6 +2974,14 @@ function cargarTodo(){
   });
 }
 
+function dePlan(r){
+  var o=r.tacticas||{};
+  o.solicitudes=o.solicitudes||[];
+  o.objetivo=r.objetivo||'';o.notas=r.notas||'';
+  o.fecha=new Date(r.actualizado).toLocaleDateString('es-HN');
+  o.__id=r.id;o.__anio=r.anio||'';
+  return o;
+}
 function deSB(r){
   return {id:r.id,tema:r.tema||'',mr:r.mr||'',sede:r.sede||'',fecha:r.fecha||'',
     monto:r.monto||'',notas:r.notas||'',criterio:null,
@@ -2899,15 +2996,22 @@ function pushPlan(k,plan){
   var tac={};
   TACTICAS.forEach(function(t){if(plan[t.id])tac[t.id]=plan[t.id];});
   if(plan.solicitudes&&plan.solicitudes.length)tac.solicitudes=plan.solicitudes;
-  sb.from('planes').upsert({
-    medico_key:k,mr:part[0],medico:part[1],
+  var row={medico_key:k,mr:part[0],medico:part[1],anio:plan.__anio||null,
     objetivo:plan.objetivo||'',notas:plan.notas||'',
-    tacticas:tac,inversion:totalPlan(plan)
-  },{onConflict:'medico_key'}).then(function(r){
-    if(r.error){toast('No se pudo sincronizar');console.error(r.error);}
+    tacticas:tac,inversion:totalPlan(plan)};
+  var q=plan.__id?sb.from('planes').update(row).eq('id',plan.__id).select('id')
+                 :sb.from('planes').upsert(row,{onConflict:'medico_key,anio'}).select('id');
+  q.then(function(r){
+    if(r.error){toast('No se pudo sincronizar');console.error(r.error);return;}
+    if(r.data&&r.data[0])plan.__id=r.data[0].id;guardaLocal();
   });
 }
-function delPlan(k){if(ONLINE)sb.from('planes').delete().eq('medico_key',k).then(function(){});}
+function delPlan(k,pl){
+  if(!ONLINE)return;
+  var q=sb.from('planes').delete();
+  q=pl&&pl.__id?q.eq('id',pl.__id):(pl&&pl.__anio?q.eq('medico_key',k).eq('anio',pl.__anio):q.eq('medico_key',k).is('anio',null));
+  q.then(function(){});
+}
 
 function pushMesa(m){
   if(!ONLINE)return;
@@ -2953,15 +3057,10 @@ function delEvento(id){if(ONLINE)sb.from('eventos').delete().eq('id',id).then(fu
 function suscribir(){
   sb.channel('planes-live')
     .on('postgres_changes',{event:'*',schema:'public',table:'planes'},function(p){
-      if(p.eventType==='DELETE'){
-        if(p.old&&p.old.medico_key)delete PLANES[p.old.medico_key];
-      }else{
-        var r=p.new,o=r.tacticas||{};
-        o.solicitudes=o.solicitudes||[];
-        o.objetivo=r.objetivo||'';o.notas=r.notas||'';
-        o.fecha=new Date(r.actualizado).toLocaleDateString('es-HN');
-        PLANES[r.medico_key]=o;
-      }
+      var id=(p.new&&p.new.id)||(p.old&&p.old.id);
+      Object.keys(PLANES_DB).forEach(function(pk){if(id&&PLANES_DB[pk].__id===id)delete PLANES_DB[pk];});
+      if(p.eventType!=='DELETE'){var r=p.new;PLANES_DB[pkDe(r.medico_key,r.anio)]=dePlan(r);}
+      guardaLocal();rehacerVista();
       renderList();refrescaPresu();
       if($('v-pyo').style.display!=='none'&&!DIRTY)renderPyo();
       // No pisar lo que el usuario está escribiendo en ese momento.
