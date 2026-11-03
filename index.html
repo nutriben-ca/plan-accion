@@ -261,6 +261,11 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .sol-tot strong{font-size:15px;color:var(--azul);font-variant-numeric:tabular-nums}
 .tag-sd{background:#fdf6e0;color:#8a6000;font-size:8.5px;font-weight:800;padding:1px 5px;
   border-radius:3px;letter-spacing:.03em;white-space:nowrap}
+.tag-an{background:#e8f0fd;color:#1552b8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:.03em;flex-shrink:0;white-space:nowrap}
+.tag-an.fuera{background:#eef0f4;color:#8892aa}
+.tag-an.sinf{background:#fdf6e0;color:#8a6000}
+.ran{font-size:9.5px;color:#1552b8;font-weight:700;margin-top:2px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tot small{font-weight:500;color:var(--t3);font-size:10.5px}
 .tag-rd{background:#e3f6ee;color:#0a6b4d;font-size:8.5px;font-weight:800;padding:1px 5px;
   border-radius:3px;letter-spacing:.03em;white-space:nowrap}
 .tag-fm{background:#f0edf9;color:#4a3f8f;font-size:8.5px;font-weight:800;padding:1px 5px;
@@ -405,6 +410,9 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   <label>Visitador
     <select id="f-mr" onchange="pickMR()"><option value="">Selecciona tu nombre…</option></select>
   </label>
+  <label>A&ntilde;o
+    <select id="f-anio" onchange="cambiaAnio(this.value)"><option value="">Todos</option></select>
+  </label>
   <label>Segmento
     <select id="f-seg" onchange="renderList()">
       <option value="">Todos</option><option value="A">A — Extranjero</option>
@@ -420,7 +428,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   </label>
   <label>Estado
     <select id="f-est" onchange="renderList()">
-      <option value="">Todos</option><option value="con">Con plan</option><option value="pat">Con patrocinio</option><option value="sin">Sin plan</option>
+      <option value="">Todos</option><option value="con">Con plan</option><option value="pat">Con patrocinio</option><option value="anio">Con actividad en el a&ntilde;o</option><option value="sin">Sin plan</option>
     </select>
   </label>
   <label>Datos
@@ -539,7 +547,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
       </select>
     </label>
     <label>A&ntilde;o
-      <select id="p-anio" onchange="ANIO_SEL=this.value;renderPresu()"></select>
+      <select id="p-anio" onchange="cambiaAnio(this.value)"></select>
     </label>
     <label>Pa&iacute;s
       <select id="p-pais" onchange="renderPresu()">
@@ -787,7 +795,8 @@ function filtrados(){
     var tiene=!!PLANES[key(d)];
     if(est==='con'&&!tiene)return false;
     if(est==='sin'&&tiene)return false;
-    if(est==='pat'){var pp=PLANES[key(d)];if(!(pp&&pp.patrocinio&&pp.patrocinio.activo))return false;}
+    if(est==='pat'){var pp=PLANES[key(d)];if(!(pp&&pp.patrocinio&&pp.patrocinio.activo&&anioTac('patrocinio',pp.patrocinio)!==null&&enAnio(anioTac('patrocinio',pp.patrocinio))))return false;}
+    if(est==='anio'&&!actsAnio(key(d),anioVista()))return false;
     return true;
   }).sort(function(a,b){
     if(!!a.contacto!==!!b.contacto)return a.contacto?1:-1;
@@ -837,14 +846,15 @@ function usarEnvio(){var e=envios()[key(cur)];if(!e)return;if(!DRAFT.objetivo)DR
 function quitarEnvio(){var o=envios();delete o[key(cur)];setEnvios(o);renderList();renderDetalleSoftKeep();}
 
 function renderList(){
-  actPend();
+  actPend();pintaAnioPlanes();
+  var anio=anioVista();
   var d=filtrados();
   $('cnt').textContent=d.length+' m\u00e9dico'+(d.length===1?'':'s');
   var mr=$('f-mr').value;
   var cartera=mr?DATA.filter(function(x){return enVista(x,mr);}):[];
   var conPlan=cartera.filter(function(x){return !!PLANES[key(x)];});
   var inv=0;
-  conPlan.forEach(function(x){inv+=totalPlan(PLANES[key(x)]);});
+  conPlan.forEach(function(x){inv+=invAnio(PLANES[key(x)],anio);});
   var sinE=cartera.filter(function(x){return x.sin_datos;}).length;
   $('k-tot').textContent=cartera.length||'—';
   var lbl=$('k-tot').parentNode.querySelector('.l');
@@ -852,6 +862,8 @@ function renderList(){
   $('k-pl').textContent=mr?conPlan.length:'—';
   cntOO();
   $('k-inv').textContent=mr?fmtUSD(inv):'—';
+  var li=$('k-inv').parentNode.querySelector('.l');
+  if(li)li.textContent=anio?'inversión '+anio:'inversión planificada';
   if(!mr){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center;line-height:1.6">Selecciona tu nombre en el men&uacute; de arriba<br>para ver tu cartera de m&eacute;dicos.</div>';return;}
   if(!d.length){$('lista').innerHTML='<div style="padding:26px 16px;color:#8892aa;font-size:11.5px;text-align:center">Ning&uacute;n m&eacute;dico con estos filtros.</div>';return;}
   $('lista').innerHTML=d.map(function(x){
@@ -865,7 +877,7 @@ function renderList(){
       +'<div class="dm">'+(esGlob(mr)?'<b>'+esc(x.mr)+'</b> &middot; ':'')+esc(x.esp)+' &middot; '+(x.ciudad?esc(x.ciudad)+' &middot; ':'')
         +(x.contacto?esc(x.contacto.institucion):(x.sin_datos?'sin datos de encuesta':'Seg. '+x.seg))+'</div></div>'
       +'<div class="dr">'+(x.contacto?'':'<span class="tier tT'+x.tier.replace('TIER ','')+'">'+x.tier.replace('TIER ','T')+'</span>')
-      +'<div class="rxp">'+(x.rx_ef||0).toFixed(1)+' &middot; '+(x.calidad||0)+'%</div></div></div>';
+      +'<div class="rxp">'+(x.rx_ef||0).toFixed(1)+' &middot; '+(x.calidad||0)+'%</div>'+filaAnio(k,anio)+'</div></div>';
   }).join('');
 }
 
@@ -948,7 +960,7 @@ function renderDetalle(){
       +'<input type="checkbox"'+(on?' checked':'')+' onclick="event.stopPropagation();toggle(\''+t.id+'\')">'
       +'<div class="tac-ic">'+t.ic+'</div>'
       +'<div class="tac-t"><div class="nm">'+t.nm+'</div><div class="ds">'+t.ds+'</div></div>'
-      +(recom?'<span class="rec">SUGERIDA</span>':'')+'</div>'
+      +(on?chipAnio(t.id,st):'')+(recom?'<span class="rec">SUGERIDA</span>':'')+'</div>'
       +'<div class="tac-b">'+sugH+'<div class="'+(t.id==='patrocinio'||t.id==='mesa'?'':(t.campos.length>=3?'f3':t.campos.length===2?'f2':''))+'">'
       +campos+'</div>'+((t.id==='oneone'||t.id==='patrocinio')&&on?solTac(t.id,d,st):'')+'</div></div>';
   }).join('');
@@ -995,7 +1007,7 @@ function renderDetalle(){
    +'<div class="save"><div class="st" id="st">'
    +(guardado?'Actualizado '+esc(guardado.fecha||''):'Sin guardar')+'</div>'
    +'<div style="display:flex;gap:9px;align-items:center">'
-   +'<span class="tot" id="tot">'+fmtUSD(totalPlan(p))+' / a&ntilde;o</span>'
+   +'<span class="tot" id="tot">'+txtTotal(p)+'</span>'
    +(guardado?'<button class="btn btn-s" onclick="borrar()">Eliminar plan</button>':'')
    +'<button class="btn btn-g" onclick="guardar()">Guardar plan</button></div></div>';
 
@@ -1110,7 +1122,7 @@ function bloqueSol(p){
     +'</div></div>';
 }
 
-function actualizarTotal(){var el=$('tot');if(el)el.textContent=fmtUSD(totalPlan(DRAFT))+' / año';}
+function actualizarTotal(){var el=$('tot');if(el)el.innerHTML=txtTotal(DRAFT);}
 
 function guardar(){
   if(!cur)return;
@@ -2366,6 +2378,76 @@ function anioPorDefecto(anios){
   var sig=String(new Date().getFullYear()+1);
   if(anios.indexOf(sig)!==-1&&datosPresu(sig).some(function(f){return f.total;}))return sig;
   return String(new Date().getFullYear());
+}
+
+/* ── Año en la vista de planes ──────────────────────────────
+   El mismo año que Presupuesto: cambiarlo en una vista cambia la otra.
+   Muestras y material son anuales y cuentan en cualquier año. */
+/* renderList corre una vez antes de que existan MESAS, SUMMITS y EVENTOS */
+function datosListos(){return Array.isArray(MESAS)&&Array.isArray(SUMMITS)&&Array.isArray(EVENTOS);}
+function anioVista(){
+  if(!datosListos())return ANIO_SEL!==undefined?ANIO_SEL:String(new Date().getFullYear());
+  var anios=aniosDisponibles();
+  if(ANIO_SEL===undefined&&Object.keys(PLANES).length)ANIO_SEL=anioPorDefecto(anios);
+  var a=ANIO_SEL===undefined?String(new Date().getFullYear()):ANIO_SEL;
+  if(a&&anios.indexOf(a)===-1)a=anios[anios.length-1];
+  return a;
+}
+function enAnio(a){var s=anioVista();return !s||a==='anual'||a===s;}
+function pintaAnioPlanes(){
+  var sel=$('f-anio');if(!sel||!datosListos())return;
+  var anios=aniosDisponibles(),a=anioVista();
+  sel.innerHTML='<option value=""'+(a===''?' selected':'')+'>Todos</option>'
+    +anios.map(function(x){return '<option'+(x===a?' selected':'')+'>'+x+'</option>';}).join('');
+  var o=$('f-est')&&$('f-est').querySelector('option[value="anio"]');
+  if(o)o.textContent=a?'Con actividad en '+a:'Con actividad con fecha';
+}
+function cambiaAnio(v){
+  ANIO_SEL=v;renderList();
+  if(cur&&DRAFT)renderDetalleSoftKeep();
+  refrescaPresu();
+}
+/* Año de una táctica: 'anual', 'AAAA', '' (sin fecha) o null (no aplica) */
+function anioTac(id,st){
+  if(!st)return null;
+  if(id==='mm'||id==='material')return 'anual';
+  if(id==='mesa')return null;
+  if(id==='patrocinio'){var e=eventoDe(st),f=fechaPat(st);return f?String(f).slice(0,4):(e&&e.anio?String(e.anio):'');}
+  return st.fecha?String(st.fecha).slice(0,4):'';
+}
+function chipAnio(id,st){
+  var a=anioTac(id,st);if(a===null)return '';
+  if(a==='anual')return '<span class="tag-an">ANUAL</span>';
+  if(!a)return '<span class="tag-an sinf">SIN FECHA</span>';
+  return '<span class="tag-an'+(enAnio(a)?'':' fuera')+'">'+a+'</span>';
+}
+function invAnio(p,anio){
+  if(!p)return 0;
+  return partidasPlan(p,anio).reduce(function(s,x){return s+(x.c==='si'?x.monto:0);},0);
+}
+/* Actividades con fecha del médico en el año: patrocinio, 1:1, solicitudes, mesas y summits */
+function actsAnio(k,anio){
+  var n=0,p=PLANES[k];if(!datosListos())return 0;
+  if(p){
+    ['patrocinio','oneone'].forEach(function(id){var v=p[id];if(!v||!v.activo)return;
+      var a=anioTac(id,v);if(a&&(!anio||a===anio))n++;});
+    (p.solicitudes||[]).forEach(function(x){var a=anioDe(x.fecha);if(a&&(!anio||a===anio))n++;});
+  }
+  MESAS.forEach(function(m){if((m.invitados||[]).indexOf(k)!==-1){var a=anioDe(m.fecha);if(a&&(!anio||a===anio))n++;}});
+  SUMMITS.forEach(function(s){if((s.invitados||[]).indexOf(k)!==-1){var a=anioDe(s.fecha_ini);if(a&&(!anio||a===anio))n++;}});
+  return n;
+}
+function filaAnio(k,anio){
+  if(!anio||!PLANES[k]&&!actsAnio(k,anio))return '';
+  var n=actsAnio(k,anio),m=invAnio(PLANES[k],anio);
+  if(!n&&!m)return '';
+  return '<div class="ran" title="Actividades con fecha e inversi&oacute;n del plan en '+anio+'">'
+    +(n?'&#128197; '+n+(m?' &middot; ':''):'')+(m?fmtUSD(m):'')+'</div>';
+}
+function txtTotal(p){
+  var anio=anioVista(),t=fmtUSD(totalPlan(p));
+  if(!anio)return t+' total';
+  return fmtUSD(invAnio(p,anio))+' en '+anio+' <small>&middot; '+t+' total del plan</small>';
 }
 
 function calendarioPresu(anio){
