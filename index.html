@@ -604,6 +604,25 @@ var PROD={
 };
 var ORDEN=['e1','hidparc','hidext','e3','sl'];
 
+/* Muestras médicas: se entregan latas originales de 400 g.
+   Costo por lata en US$ (tasa 1.18 US$/€, nov-2026). El costo de MM
+   ya no se digita: es latas/mes × costo de la lata del producto.
+   Un plan sin producto guardado se valora como el primero de la lista
+   (Natal PRO-α), que es lo que el selector mostraba por defecto. */
+var MM_COSTO={
+  'Natal PRO-α':5.051,
+  'Confort':7.234,
+  'Arroz Hidrolizado':10.184,
+  'Hidrolizada 1':11.588,
+  'Bajo Peso':7.057,
+  'Continuación PRO-α':5.924,
+  'Sin Lactosa 1':7.741
+};
+var MM_ORDEN=Object.keys(MM_COSTO);
+function mmProd(v){return (v&&v.producto&&MM_COSTO[v.producto]!=null)?v.producto:MM_ORDEN[0];}
+function mmMensual(v){return v?num(v.cant)*MM_COSTO[mmProd(v)]:0;}
+function fmt2(x){return 'US$ '+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
 /* Temas científicos ligados al hueco de portafolio de cada médico.
    La clave no es qué receta mucho, sino qué producto de alto peso
    está dejando sobre la mesa. */
@@ -938,7 +957,7 @@ function totalPlan(p){
   if(!p)return 0;var t=0;
   TACTICAS.forEach(function(tc){
     var v=p[tc.id];
-    if(v&&v.activo&&tc.id!=='mesa')t+=num(v.monto)*(tc.id==='mm'?12:1);
+    if(v&&v.activo&&tc.id!=='mesa')t+=(tc.id==='mm'?mmMensual(v)*12:num(v.monto));
   });
   t+=totalSol(p);
   return t;
@@ -986,6 +1005,17 @@ function renderDetalle(){
               return '<span class="ch" onclick="usarTema(\''+t.id+'\',\''+name+'\','+JSON.stringify(x).replace(/"/g,'&quot;')+')">'+esc(x)+'</span>';
             }).join('')+'</div></div>';
       }
+      if(tipo==='producto'&&t.id==='mm'){
+        var pv=mmProd(st);
+        return '<div class="fg"><label>'+lbl+' (lata 400 g)</label><select onchange="setF(\'mm\',\'producto\',this.value)">'
+          +MM_ORDEN.map(function(n){return '<option value="'+n+'"'+(pv===n?' selected':'')+'>'+n+' &mdash; US$ '+MM_COSTO[n].toFixed(2)+'/lata</option>';}).join('')
+          +'</select></div>';
+      }
+      if(t.id==='mm'&&name==='monto'){
+        var mm=mmMensual(st);
+        return '<div class="fg"><label>'+lbl+'</label><input type="text" id="mm-monto" readonly tabindex="-1" style="background:#f3f6fb;color:#0033A1;font-weight:600" value="'+(mm?fmt2(mm):'')+'" placeholder="Se calcula con latas &times; costo">'
+          +'<div id="mm-anual" style="font-size:11.5px;color:#5b6577;margin-top:4px">'+(mm?'Anual: '+fmt2(mm*12):'')+'</div></div>';
+      }
       if(tipo==='producto'){
         return '<div class="fg"><label>'+lbl+'</label><select onchange="setF(\''+t.id+'\',\''+name+'\',this.value)">'
           +ORDEN.map(function(kk){return '<option'+(val===PROD[kk].n?' selected':'')+'>'+PROD[kk].n+'</option>';}).join('')
@@ -1006,7 +1036,7 @@ function renderDetalle(){
     }
     if(t.id==='mm'){
       sugH='<div class="sug"><b>Producto sugerido:</b> '+PROD[a.hueco].n
-        +' &mdash; es donde la muestra convierte volumen en valor. El costo se multiplica por 12 para la inversi&oacute;n anual.</div>';
+        +' &mdash; es donde la muestra convierte volumen en valor. Latas originales de 400 g; el costo mensual es latas &times; costo por lata y se multiplica por 12 para la inversi&oacute;n anual.</div>';
     }
     return '<div class="tac'+(on?' on':'')+'" id="tac-'+t.id+'">'
       +'<div class="tac-h" onclick="toggle(\''+t.id+'\',event)">'
@@ -1089,6 +1119,13 @@ function setF(tid,campo,val){
   DRAFT[tid]=DRAFT[tid]||{activo:true};
   if(val==='__otro'){DRAFT[tid][campo]='';renderDetalleSoft();return;}
   DRAFT[tid][campo]=val;
+  if(tid==='mm'){
+    DRAFT.mm.producto=mmProd(DRAFT.mm);   /* deja guardado el producto que se ve */
+    var m=mmMensual(DRAFT.mm);DRAFT.mm.monto=m?String(Math.round(m*100)/100):'';
+    var a=$('mm-monto'),b=$('mm-anual');
+    if(a)a.value=m?fmt2(m):'';if(b)b.textContent=m?'Anual: '+fmt2(m*12):'';
+    actualizarTotal();return;
+  }
   if(campo==='monto')actualizarTotal();
 }
 function repintar(){var el=document.querySelector('.detail'),sc=el.scrollTop;
@@ -1221,7 +1258,7 @@ function exportar(){
       act('patrocinio'),(act('patrocinio')?(eventoDe(p.patrocinio)?eventoDe(p.patrocinio).nombre:(p.patrocinio.evento||'')):''),(act('patrocinio')?fechaPat(p.patrocinio):''),num(g('patrocinio','monto')),
       (mesasDe(key(d)).length?'Sí':act('mesa')),mesasDe(key(d)).map(function(m){return m.tema;}).join(' | '),mesasDe(key(d)).map(function(m){return m.sede;}).join(' | '),mesasDe(key(d)).map(function(m){return m.fecha;}).join(' | '),0,
       act('oneone'),g('oneone','tema'),g('oneone','fecha'),num(g('oneone','monto')),
-      act('mm'),g('mm','producto'),num(g('mm','cant')),num(g('mm','monto')),num(g('mm','monto'))*12,
+      act('mm'),(act('mm')?mmProd(p.mm):g('mm','producto')),num(g('mm','cant')),(act('mm')?Math.round(mmMensual(p.mm)*100)/100:0),(act('mm')?Math.round(mmMensual(p.mm)*1200)/100:0),
       act('material'),g('material','piezas'),num(g('material','monto')),
       (p.solicitudes||[]).length,totalSol(p),
       totalPlan(p),p.notas||''];
@@ -2335,8 +2372,8 @@ function partidasPlan(p,anio){
   var cAnual=(!anio||!pa||pa===anio)?'si':'no';
   TACTICAS.forEach(function(t){
     var v=p[t.id];if(!v||!v.activo||t.id==='mesa')return;
-    var m=num(v.monto);if(!m)return;
-    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual,det:v.producto||''});return;}
+    var m=t.id==='mm'?mmMensual(v):num(v.monto);if(!m)return;
+    if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual,det:mmProd(v)});return;}
     if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:cAnual,det:v.piezas||''});return;}
     if(t.id==='patrocinio'){var e=eventoDe(v),f=fechaPat(v);
       out.push({tipo:'patrocinio',monto:m,fecha:f,c:clasifica(f,(e&&e.anio)||pa,anio),det:e?e.nombre:(v.evento||v.evento_txt||'')});return;}
