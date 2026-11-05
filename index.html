@@ -256,6 +256,11 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 .sol-r:last-child{border-bottom:none}
 .sol-h{background:var(--bg);font-size:9.5px;font-weight:700;color:var(--t3);letter-spacing:.04em}
 .sol-r input,.sol-r select{width:100%;font-size:11.5px;padding:5px 7px}
+.oo-r{display:grid;grid-template-columns:118px 1fr 96px 30px;gap:7px;align-items:center;margin-bottom:6px}
+.oo-r input{width:100%}
+.oo-n{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.04em;margin:10px 0 4px}
+.oo-n:first-child{margin-top:0}
+@media(max-width:700px){.oo-r{grid-template-columns:1fr 1fr}}
 .sol-x{background:none;border:none;color:var(--bad);cursor:pointer;font-size:15px;font-weight:700;padding:0}
 .sol-v{display:none}
 .sol-tot{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
@@ -621,6 +626,22 @@ var MM_COSTO={
 var MM_ORDEN=Object.keys(MM_COSTO);
 function mmProd(v){return (v&&v.producto&&MM_COSTO[v.producto]!=null)?v.producto:MM_ORDEN[0];}
 function mmMensual(v){return v?num(v.cant)*MM_COSTO[mmProd(v)]:0;}
+/* One to one: varias sesiones por médico en el año. Se guardan en
+   oneone.ses=[{id,tema,fecha,monto}]. Los planes viejos (un solo 1:1 con
+   tema/fecha/monto sueltos) se leen como una sesión con id '' para que
+   conserven la solicitud de gastos que ya tenían. */
+function ooSes(v){
+  if(!v)return [];
+  if(Array.isArray(v.ses))return v.ses;
+  return (v.tema||v.fecha||num(v.monto))?[{id:'',tema:v.tema||'',fecha:v.fecha||'',monto:v.monto||''}]:[];
+}
+function ooNorm(v){
+  if(!Array.isArray(v.ses)){v.ses=ooSes(v).map(function(x){return Object.assign({},x);});delete v.tema;delete v.fecha;delete v.monto;}
+  if(!v.ses.length)v.ses.push({id:ooId(),tema:'',fecha:'',monto:''});
+  return v;
+}
+function ooId(){return 'o'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function ooTotal(v){return ooSes(v).reduce(function(a,x){return a+num(x.monto);},0);}
 function fmt2(x){return 'US$ '+x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 /* Temas científicos ligados al hueco de portafolio de cada médico.
@@ -957,7 +978,7 @@ function totalPlan(p){
   if(!p)return 0;var t=0;
   TACTICAS.forEach(function(tc){
     var v=p[tc.id];
-    if(v&&v.activo&&tc.id!=='mesa')t+=(tc.id==='mm'?mmMensual(v)*12:num(v.monto));
+    if(v&&v.activo&&tc.id!=='mesa')t+=(tc.id==='mm'?mmMensual(v)*12:tc.id==='oneone'?ooTotal(v):num(v.monto));
   });
   t+=totalSol(p);
   return t;
@@ -1026,13 +1047,14 @@ function renderDetalle(){
     }).join('');
 
     if(t.id==='patrocinio')campos=bloquePatrocinio(st,d);
+    if(t.id==='oneone')campos=bloqueOO(st,d,a,on);
     if(t.id==='mesa')campos=bloqueMesa(st,d);
     var sugH='';
     if(t.id==='oneone'&&d.contacto){
       sugH='<div class="sug"><b>Capacitaci&oacute;n o visita de actualizaci&oacute;n</b> para este profesional. Escribe el tema; las sugerencias son opcionales.</div>';
     }else if(t.id==='oneone'){
       sugH='<div class="sug"><b>Tema libre.</b> El hueco de este m&eacute;dico es '+PROD[a.hueco].n
-        +'; las sugerencias de abajo apuntan ah&iacute;, pero puedes escribir el tuyo.</div>';
+        +'; al tocar el tema ver&aacute;s sugerencias que apuntan ah&iacute;, pero puedes escribir el tuyo. Usa <b>+ Agregar one to one</b> para planificar m&aacute;s sesiones en el a&ntilde;o.</div>';
     }
     if(t.id==='mm'){
       sugH='<div class="sug"><b>Producto sugerido:</b> '+PROD[a.hueco].n
@@ -1044,8 +1066,8 @@ function renderDetalle(){
       +'<div class="tac-ic">'+t.ic+'</div>'
       +'<div class="tac-t"><div class="nm">'+t.nm+'</div><div class="ds">'+t.ds+'</div></div>'
       +(on?chipAnio(t.id,st):'')+(recom?'<span class="rec">SUGERIDA</span>':'')+'</div>'
-      +'<div class="tac-b">'+sugH+'<div class="'+(t.id==='patrocinio'||t.id==='mesa'?'':(t.campos.length>=3?'f3':t.campos.length===2?'f2':''))+'">'
-      +campos+'</div>'+((t.id==='oneone'||t.id==='patrocinio')&&on?solTac(t.id,d,st):'')+'</div></div>';
+      +'<div class="tac-b">'+sugH+'<div class="'+(t.id==='patrocinio'||t.id==='mesa'||t.id==='oneone'?'':(t.campos.length>=3?'f3':t.campos.length===2?'f2':''))+'">'
+      +campos+'</div>'+(t.id==='patrocinio'&&on?solTac(t.id,d,st):'')+'</div></div>';
   }).join('');
 
   $('detalle').innerHTML=
@@ -1257,7 +1279,7 @@ function exportar(){
       d.e1,d.hidparc,d.hidext,d.e3,d.sl,PROD[a.hueco].n,d.patron,p.objetivo||'',
       act('patrocinio'),(act('patrocinio')?(eventoDe(p.patrocinio)?eventoDe(p.patrocinio).nombre:(p.patrocinio.evento||'')):''),(act('patrocinio')?fechaPat(p.patrocinio):''),num(g('patrocinio','monto')),
       (mesasDe(key(d)).length?'Sí':act('mesa')),mesasDe(key(d)).map(function(m){return m.tema;}).join(' | '),mesasDe(key(d)).map(function(m){return m.sede;}).join(' | '),mesasDe(key(d)).map(function(m){return m.fecha;}).join(' | '),0,
-      act('oneone'),g('oneone','tema'),g('oneone','fecha'),num(g('oneone','monto')),
+      (act('oneone')&&ooSes(p.oneone).length>1?'Sí ('+ooSes(p.oneone).length+')':act('oneone')),(act('oneone')?ooSes(p.oneone).map(function(x){return x.tema;}).join(' | '):''),(act('oneone')?ooSes(p.oneone).map(function(x){return x.fecha;}).join(' | '):''),(act('oneone')?ooTotal(p.oneone):0),
       act('mm'),(act('mm')?mmProd(p.mm):g('mm','producto')),num(g('mm','cant')),(act('mm')?Math.round(mmMensual(p.mm)*100)/100:0),(act('mm')?Math.round(mmMensual(p.mm)*1200)/100:0),
       act('material'),g('material','piezas'),num(g('material','monto')),
       (p.solicitudes||[]).length,totalSol(p),
@@ -1730,12 +1752,14 @@ function borrarEvento(){
 function filasOO(){
   var est=$('e-est').value;
   return Object.keys(PLANES).filter(function(k){
-    var v=PLANES[k].oneone;return v&&v.activo&&filtroPyo(k)&&(!est||estadoFecha(v.fecha)===est);
-  }).map(function(k){var v=PLANES[k].oneone,d=byKey(k);
-    return {k:k,d:d,mr:k.split('||')[0],n:d?d.n:k.split('||')[1],tema:v.tema||'',fecha:v.fecha||'',monto:num(v.monto)};});
+    var v=PLANES[k].oneone;return v&&v.activo&&filtroPyo(k);
+  }).reduce(function(out,k){var v=PLANES[k].oneone,d=byKey(k);
+    ooSes(v).forEach(function(x){if(est&&estadoFecha(x.fecha)!==est)return;
+      out.push({k:k,d:d,mr:k.split('||')[0],n:d?d.n:k.split('||')[1],tema:x.tema||'',fecha:x.fecha||'',monto:num(x.monto)});});
+    return out;},[]);
 }
 function cntOO(){
-  var n=Object.keys(PLANES).filter(function(k){var v=PLANES[k].oneone;return v&&v.activo;}).length;
+  var n=Object.keys(PLANES).reduce(function(a,k){var v=PLANES[k].oneone;return a+(v&&v.activo?Math.max(1,ooSes(v).length):0);},0);
   var b=$('nv-oc');if(b)b.textContent=n;
 }
 function renderOO(){
@@ -2372,6 +2396,8 @@ function partidasPlan(p,anio){
   var cAnual=(!anio||!pa||pa===anio)?'si':'no';
   TACTICAS.forEach(function(t){
     var v=p[t.id];if(!v||!v.activo||t.id==='mesa')return;
+    if(t.id==='oneone'){ooSes(v).forEach(function(x){var mo=num(x.monto);
+      if(mo)out.push({tipo:'oneone',monto:mo,fecha:x.fecha||'',c:clasifica(x.fecha,pa,anio),det:x.tema||''});});return;}
     var m=t.id==='mm'?mmMensual(v):num(v.monto);if(!m)return;
     if(t.id==='mm'){out.push({tipo:'mm',monto:m*12,rec:true,fecha:'',c:cAnual,det:mmProd(v)});return;}
     if(t.id==='material'){out.push({tipo:'material',monto:m,fecha:'',c:cAnual,det:v.piezas||''});return;}
@@ -2525,6 +2551,7 @@ function anioTac(id,st){
   return st.fecha?String(st.fecha).slice(0,4):'';
 }
 function chipAnio(id,st){
+  if(id==='oneone'){var L=ooSes(st);if(L.length>1)return '<span class="tag-an">'+L.length+' SESIONES</span>';st=L[0]||{};}
   var a=anioTac(id,st);if(a===null)return '';
   if(a==='anual')return '<span class="tag-an">ANUAL</span>';
   if(!a)return '<span class="tag-an sinf">SIN FECHA</span>';
@@ -2538,8 +2565,8 @@ function invAnio(p,anio){
 function actsAnio(k,anio){
   var n=0,p=PLANES[k];if(!datosListos())return 0;
   if(p){
-    ['patrocinio','oneone'].forEach(function(id){var v=p[id];if(!v||!v.activo)return;
-      var a=anioTac(id,v);if(a&&(!anio||a===anio))n++;});
+    if(p.patrocinio&&p.patrocinio.activo){var a=anioTac('patrocinio',p.patrocinio);if(a&&(!anio||a===anio))n++;}
+    if(p.oneone&&p.oneone.activo)ooSes(p.oneone).forEach(function(x){var a=anioDe(x.fecha);if(a&&(!anio||a===anio))n++;});
     (p.solicitudes||[]).forEach(function(x){var a=anioDe(x.fecha);if(a&&(!anio||a===anio))n++;});
   }
   MESAS.forEach(function(m){if((m.invitados||[]).indexOf(k)!==-1){var a=anioDe(m.fecha);if(a&&(!anio||a===anio))n++;}});
@@ -2957,6 +2984,45 @@ function solTac(id,d,st){
     title:('Patrocinio: '+nom+' — '+d.n).slice(0,120),
     just:'Plan de Acción. '+obj+'Patrocinio de '+d.n+' a '+nom+'.',
     ben:d.n+(d.esp?' ('+d.esp+')':''),date:fechaPat(st)||'',usd:num(st.monto),pais:d.pais||paisMR(d.mr),mr:d.mr,aud:audDe(d),inst:instDe(d)});
+}
+function bloqueOO(st,d,a,on){
+  var v=DRAFT.oneone=DRAFT.oneone||{activo:!!st.activo};ooNorm(v);
+  var temas=(d.contacto?[]:(TEMAS[a.hueco]||[]));
+  var dl='<datalist id="oo-temas">'+temas.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist>';
+  var multi=v.ses.length>1;
+  return dl+v.ses.map(function(x,i){
+    return (multi?'<div class="oo-n">ONE TO ONE '+(i+1)+'</div>':'')
+      +'<div class="oo-r">'
+      +'<input type="date" value="'+esc(x.fecha||'')+'" onchange="setOO('+i+',\'fecha\',this.value)" title="Fecha estimada">'
+      +'<input type="text" list="oo-temas" value="'+esc(x.tema||'')+'" placeholder="Tema científico de la sesión…" oninput="setOO('+i+',\'tema\',this.value)">'
+      +'<input type="number" value="'+esc(x.monto||'')+'" placeholder="US$" oninput="setOO('+i+',\'monto\',this.value)" title="Inversión (US$)">'
+      +(multi?'<button class="sol-x" onclick="delOO('+i+')" title="Quitar este one to one">&times;</button>':'<span></span>')
+      +'</div>'+(on?solOO(d,x):'');
+  }).join('')
+  +'<button class="btn btn-s" style="margin-top:8px" onclick="addOO()">+ Agregar one to one</button>'
+  +(multi?'<span style="margin-left:10px;font-size:12px;color:var(--t3)">'+v.ses.length+' sesiones &middot; <b id="oo-tot">'+fmtUSD(ooTotal(v))+'</b></span>':'');
+}
+function solOO(d,x){
+  var obj=(DRAFT&&DRAFT.objetivo)?DRAFT.objetivo+'. ':'';
+  /* id '' = el 1:1 único de antes: conserva su referencia original */
+  var ref='oneone:'+key(d)+(x.id?'#'+x.id:'')+'@'+ANIO_PLAN;
+  return solBar(ref,{tipo:'medicos',sub:'oneone',
+    title:('One to one'+(x.tema?': '+x.tema:'')+' — '+d.n).slice(0,120),
+    just:'Plan de Acción. '+obj+(x.tema?'Tema: '+x.tema+'. ':'')+'Sesión individual de actualización con '+d.n+'.',
+    ben:d.n+(d.esp?' ('+d.esp+')':''),date:x.fecha||'',usd:num(x.monto),pais:d.pais||paisMR(d.mr),mr:d.mr,aud:audDe(d),inst:instDe(d)});
+}
+function setOO(i,campo,val){
+  tocar();ooNorm(DRAFT.oneone);DRAFT.oneone.ses[i][campo]=val;
+  if(campo==='monto'){actualizarTotal();var e=$('oo-tot');if(e)e.textContent=fmtUSD(ooTotal(DRAFT.oneone));}
+}
+function addOO(){
+  tocar();ooNorm(DRAFT.oneone);DRAFT.oneone.activo=true;
+  DRAFT.oneone.ses.push({id:ooId(),tema:'',fecha:'',monto:''});repintar();
+}
+function delOO(i){
+  var x=DRAFT.oneone.ses[i];
+  if((x.tema||x.fecha||num(x.monto))&&!confirm('¿Quitar este one to one del plan?'))return;
+  DRAFT.oneone.ses.splice(i,1);tocar();repintar();actualizarTotal();
 }
 function solMesa(m,inv){
   var nombres=inv.map(function(d){return d.n;});
