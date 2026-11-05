@@ -419,7 +419,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
   <div class="nv" id="nv-oo" onclick="vista('oo')">&#129309; One to one <span class="nvc" id="nv-oc">0</span></div>
   <div class="nv" id="nv-mesas" onclick="vista('mesas')">&#127908; Mesas redondas <span class="nvc" id="nv-mc">0</span></div>
   <div class="nv" id="nv-summits" onclick="vista('summits')">&#9968; Summits locales <span class="nvc" id="nv-sc">0</span></div>
-  <div class="nv" id="nv-cn" onclick="vista('cn')">&#127963; Congresos nacionales <span class="nvc" id="nv-cnc">0</span></div>
+  <div class="nv" id="nv-cn" onclick="vista('cn')">&#127963; Eventos nacionales <span class="nvc" id="nv-cnc">0</span></div>
   <div class="nv" id="nv-presu" onclick="vista('presu')">&#128176; Presupuesto</div>
   <label class="nv-an">Plan del a&ntilde;o <select id="f-anio" onchange="cambiaAnio(this.value)"><option></option></select></label>
 </div>
@@ -562,13 +562,13 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
     <label>Estado
       <select id="cn-est" onchange="renderCongresos()"><option value="">Todos</option><option value="prox">Por realizar</option><option value="sinf">Sin fecha</option><option value="real">Realizados</option></select>
     </label>
-    <button class="btn btn-p" onclick="nuevoCongreso()">+ Nuevo congreso</button>
+    <button class="btn btn-p" onclick="nuevoCongreso()">+ Nuevo evento nacional</button>
     <span class="badge" id="cn-cnt">&mdash;</span>
     <button class="btn btn-s" onclick="exportCN()">&#8681; Excel</button>
   </div>
   <div class="main">
     <div class="list">
-      <div class="lhead"><span>CONGRESOS</span><span>PRESUPUESTO PA&Iacute;S</span></div>
+      <div class="lhead"><span>EVENTOS NACIONALES</span><span>PRESUPUESTO PA&Iacute;S</span></div>
       <div id="cn-lista"></div>
     </div>
     <div class="detail" id="cn-detalle"></div>
@@ -1675,8 +1675,8 @@ function renderEvento(){
    +'<input type="text" class="tema-in" placeholder="Nombre del evento…" value="'+esc(e.nombre)+'" '
    +'onchange="setE(\'nombre\',this.value.trim())" style="font-size:16px;font-weight:700">'
    +'<div style="margin-top:6px">'+chipEstado(e.fecha)+'</div>'
-   +(function(){var c=CONGRESOS.filter(function(x){return x.evento_id===e.id;})[0];return c?'<div class="nota-v" style="margin-top:8px">&#127963; Congreso nacional. Aqu&iacute; van solo los patrocinios individuales de m&eacute;dicos (centro de costo de cada VM). '
-     +'La participaci&oacute;n institucional est&aacute; en <a href="#" onclick="irCongreso(\''+jsq(c.id)+'\');return false">Congresos nacionales</a> y va al presupuesto de pa&iacute;s.</div>':'';})()
+   +(function(){var c=CONGRESOS.filter(function(x){return x.evento_id===e.id;})[0];return c?'<div class="nota-v" style="margin-top:8px">&#127963; Evento nacional. Aqu&iacute; van solo los patrocinios individuales de m&eacute;dicos (centro de costo de cada VM). '
+     +'La participaci&oacute;n institucional est&aacute; en <a href="#" onclick="irCongreso(\''+jsq(c.id)+'\');return false">Eventos nacionales</a> y va al presupuesto de pa&iacute;s.</div>':'';})()
    +'</div>'
    +(n?'<select class="fus" onchange="fusionarEvento(this.value)"><option value="">Fusionar con…</option>'
       +otros.map(function(o){return '<option value="'+esc(o.id)+'">'+esc(lblEvento(o))+'</option>';}).join('')+'</select>'
@@ -2392,6 +2392,8 @@ var CAT_CN=[
   {k:'alimentacion',n:'Alimentación / coffee break',ic:'☕'},
   {k:'otros',n:'Otros',ic:'➕'}];
 var NAC_PRE='🏛 Nacional · ';
+var TIPOS_CN=[['congreso','Congreso nacional','congreso_nac'],['jornada','Jornada de actualización','otro'],['otro','Otro evento nacional','otro']];
+function tipoCN(t){return TIPOS_CN.filter(function(x){return x[0]===t;})[0]||TIPOS_CN[0];}
 function C_(){return CONGRESOS.filter(function(x){return x.id===curC;})[0];}
 function cnPorId(id){return CONGRESOS.filter(function(x){return x.id===id;})[0]||null;}
 function anioCN(c){return c.fecha?String(c.fecha).slice(0,4):(c.anio?String(c.anio):'');}
@@ -2412,19 +2414,22 @@ function cnCuenta(){var b=$('nv-cnc');if(b)b.textContent=CONGRESOS.filter(functi
 
 /* Congresos que probablemente son el mismo: mismo país y año, y el
    nombre contiene al otro o comparte dos palabras significativas. */
-function cnParecidos(nombre,pais,anio,salvo){
+function cnParecidos(nombre,pais,anio,tipo,salvo){
   var t=normTxt(nombre);if(t.length<3)return [];
-  var pal=function(s){return normTxt(s).replace(/[^a-z0-9 ]/g,' ').split(' ').filter(function(w){
-    return w.length>=4&&['congreso','nacional','pediatria','anual','honduras','salvador','sociedad','asociacion','medico'].indexOf(w)===-1;});};
+  var STOP=['congreso','nacional','pediatria','pediatrica','pediatrico','pediatricas','anual','honduras','salvador','sociedad','asociacion',
+    'medico','medica','jornada','jornadas','actualizacion','evento','curso','simposio','hondureno','hondurena','salvadoreno','salvadorena'];
+  var pal=function(s){return normTxt(s).replace(/[^a-z0-9 ]/g,' ').split(' ').filter(function(w){return w.length>=4&&STOP.indexOf(w)===-1&&!/^\d+$/.test(w);});};
   var A=pal(nombre);
   return CONGRESOS.filter(function(c){
     if(c.id===salvo)return false;
     if(pais&&c.pais!==pais)return false;
     if(anio&&anioCN(c)&&anioCN(c)!==String(anio))return false;
+    if((c.tipo||'congreso')!==(tipo||'congreso'))return false;
+    if((tipo||'congreso')==='congreso')return true; /* un congreso nacional por país y año: mostrar siempre los que ya hay */
     var u=normTxt(c.nombre);if(!u)return false;
     if(u===t||u.indexOf(t)!==-1||t.indexOf(u)!==-1)return true;
-    var B=pal(c.nombre),com=A.filter(function(w){return B.indexOf(w)!==-1;}).length;
-    return com>=2||(com>=1&&A.length===1&&B.length===1)||(/pediatr/.test(t)&&/pediatr/.test(u));
+    var B=pal(c.nombre);
+    return A.some(function(w){return B.indexOf(w)!==-1;});
   });
 }
 
@@ -2444,13 +2449,13 @@ function renderCongresos(){
   });
   cnCuenta();
   var tot=L.reduce(function(a,c){return a+totalCN(c);},0);
-  $('cn-cnt').textContent=L.length+' congreso'+(L.length===1?'':'s')+' · '+fmtUSD(tot);
-  if(!L.length){$('cn-lista').innerHTML='<div class="vacio">Sin congresos nacionales en '+esc(ANIO_PLAN)+'.<br>Crea uno con el bot&oacute;n de arriba.</div>';return;}
+  $('cn-cnt').textContent=L.length+' evento'+(L.length===1?'':'s')+' · '+fmtUSD(tot);
+  if(!L.length){$('cn-lista').innerHTML='<div class="vacio">Sin eventos nacionales en '+esc(ANIO_PLAN)+'.<br>Crea uno con el bot&oacute;n de arriba.</div>';return;}
   $('cn-lista').innerHTML=agrupar(L,'fecha',function(c){
     var t=totalCN(c);
     return '<div class="mesa'+(curC===c.id?' sel':'')+'" onclick="abrirCongreso(\''+jsq(c.id)+'\')">'
-      +'<div class="mt">'+(c.nombre?esc(c.nombre):'<span style="color:#b0b8c8">Congreso sin nombre</span>')+'</div>'
-      +'<div class="ms"><span>'+esc(c.pais||'sin pa&iacute;s')+' &middot; '+(c.fecha?fDia(c.fecha):(c.anio?'a&ntilde;o '+esc(c.anio):'sin fecha'))
+      +'<div class="mt">'+(c.nombre?esc(c.nombre):'<span style="color:#b0b8c8">Evento sin nombre</span>')+'</div>'
+      +'<div class="ms"><span>'+tipoCN(c.tipo)[1]+' &middot; '+esc(c.pais||'sin pa&iacute;s')+' &middot; '+(c.fecha?fDia(c.fecha):(c.anio?'a&ntilde;o '+esc(c.anio):'sin fecha'))
       +(c.mr?' &middot; '+esc(c.mr):'')+'</span><span class="cn" style="background:var(--azul75)">'+(t?fmtUSD(t):'$0')+'</span></div></div>';
   });
 }
@@ -2458,10 +2463,11 @@ function renderCongresos(){
 /* ── Alta con control de duplicados ── */
 function formNuevoCN(){
   var yo=cnYo(),pa=$('cn-pais').value||(yo?mrPais(yo):'')||'Honduras';
-  return '<div class="dhead"><div style="flex:1"><div style="font-size:16px;font-weight:700;color:var(--azul)">Nuevo congreso nacional</div>'
+  return '<div class="dhead"><div style="flex:1"><div style="font-size:16px;font-weight:700;color:var(--azul)">Nuevo evento nacional</div>'
     +'<div style="font-size:12px;color:var(--t2);margin-top:2px">Antes de crearlo revisa la lista de abajo: si un compa&ntilde;ero ya lo cre&oacute;, &aacute;brelo y trabaja sobre ese.</div></div></div>'
     +'<div class="sec"><div class="sec-b">'
-    +'<div class="fg"><label>Nombre del congreso</label><input type="text" id="cnn-nombre" maxlength="120" placeholder="Ej: XXXV Congreso Nacional de Pediatr&iacute;a" oninput="cnSugerir()"></div>'
+    +'<div class="f2"><div class="fg"><label>Tipo</label><select id="cnn-tipo" onchange="cnSugerir()">'+TIPOS_CN.map(function(t){return '<option value="'+t[0]+'">'+t[1]+'</option>';}).join('')+'</select></div>'
+    +'<div class="fg"><label>Nombre</label><input type="text" id="cnn-nombre" maxlength="120" placeholder="Ej: XXXV Congreso Nacional de Pediatr&iacute;a, Jornada de Actualizaci&oacute;n Pedi&aacute;trica de Olancho" oninput="cnSugerir()"></div></div>'
     +'<div class="f3">'
     +'<div class="fg"><label>Pa&iacute;s</label><select id="cnn-pais" onchange="cnSugerir()">'
       +['Honduras','El Salvador'].map(function(p){return '<option'+(p===pa?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'
@@ -2471,7 +2477,7 @@ function formNuevoCN(){
     +'<div class="fg" style="max-width:320px"><label>VM responsable</label><select id="cnn-mr"><option value="">Selecciona…</option>'
       +cnMRs().map(function(m){return '<option'+(m===yo?' selected':'')+'>'+esc(m)+'</option>';}).join('')+'</select></div>'
     +'<div id="cnn-sug"></div>'
-    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-p" id="cnn-ok" onclick="crearCongreso()">Crear congreso</button>'
+    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-p" id="cnn-ok" onclick="crearCongreso()">Crear evento</button>'
     +'<button class="btn btn-s" onclick="CN_NUEVO=false;renderCongreso()">Cancelar</button></div>'
     +'</div></div>'
     +'<div class="lect">El responsable organiza la participaci&oacute;n y pide la aprobaci&oacute;n en la app de gastos. '
@@ -2482,11 +2488,11 @@ function cnSugerir(){
   var n=$('cnn-nombre').value.trim(),pa=$('cnn-pais').value,an=cnNuevoAnio(),box=$('cnn-sug');if(!box)return;
   if($('cnn-fecha').value)$('cnn-anio').value=an;
   var cl=claveCN(n,pa,an),exacto=n?CONGRESOS.filter(function(c){return c.clave===cl;})[0]:null;
-  var L=n?cnParecidos(n,pa,an):[];
+  var L=n?cnParecidos(n,pa,an,$('cnn-tipo').value):[];
   $('cnn-ok').disabled=!!exacto;
   if(!L.length){box.innerHTML='';return;}
   box.innerHTML='<div class="warn-v" style="margin-top:10px">'
-    +(exacto?'<b>Este congreso ya existe.</b> &Aacute;brelo y agrega ah&iacute; lo que falte.':'<b>&iquest;Es alguno de estos?</b> Ya existen en '+esc(pa)+' '+esc(an)+':')
+    +(exacto?'<b>Este evento ya existe.</b> &Aacute;brelo y agrega ah&iacute; lo que falte.':'<b>&iquest;Es alguno de estos?</b> Ya existen en '+esc(pa)+' '+esc(an)+':')
     +L.map(function(c){return '<div style="display:flex;gap:8px;align-items:center;margin-top:6px">'
       +'<button class="mini-btn" onclick="abrirCongreso(\''+jsq(c.id)+'\')">Abrir</button>'
       +'<span><b>'+esc(c.nombre)+'</b> &middot; '+(c.fecha?fDia(c.fecha):'a&ntilde;o '+esc(anioCN(c)))+(c.mr?' &middot; responsable '+esc(c.mr):'')+'</span></div>';}).join('')
@@ -2494,15 +2500,15 @@ function cnSugerir(){
 }
 function crearCongreso(){
   var n=$('cnn-nombre').value.trim(),pa=$('cnn-pais').value,f=$('cnn-fecha').value||'',an=cnNuevoAnio(),mr=$('cnn-mr').value;
-  if(!n){toast('Escribe el nombre del congreso');return;}
-  if(!/^\d{4}$/.test(an)){toast('Pon la fecha o el año del congreso');return;}
+  if(!n){toast('Escribe el nombre del evento');return;}
+  if(!/^\d{4}$/.test(an)){toast('Pon la fecha o el año del evento');return;}
   if(!mr){toast('Elige el VM responsable');return;}
   var cl=claveCN(n,pa,an),ya=CONGRESOS.filter(function(c){return c.clave===cl;})[0];
-  if(ya){toast('Ese congreso ya existía: lo abrí');abrirCongreso(ya.id);return;}
-  var c={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),clave:cl,nombre:n,pais:pa,sede:'',
+  if(ya){toast('Ese evento ya existía: lo abrí');abrirCongreso(ya.id);return;}
+  var c={id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),clave:cl,tipo:$('cnn-tipo').value,nombre:n,pais:pa,sede:'',
     fecha:f,fecha_fin:'',anio:an,mr:mr,costos:[],evento_id:'',notas:''};
   CONGRESOS.push(c);saveCongresos(c);CN_NUEVO=false;curC=c.id;
-  if(an!==ANIO_PLAN)toast('Creado para '+an+'. Cambia el año arriba para verlo en la lista.');else toast('Congreso creado');
+  if(an!==ANIO_PLAN)toast('Creado para '+an+'. Cambia el año arriba para verlo en la lista.');else toast('Evento nacional creado');
   renderCongresos();renderCongreso();
 }
 
@@ -2513,12 +2519,12 @@ function setCN(campo,v){
   if(campo==='fecha'&&v)nv.anio=v.slice(0,4);
   if(['nombre','pais','fecha','anio'].indexOf(campo)!==-1){
     var cl=claveCN(nv.nombre,nv.pais,anioCN(nv)),otro=CONGRESOS.filter(function(x){return x.id!==c.id&&x.clave===cl;})[0];
-    if(otro){toast('Ya existe "'+otro.nombre+'" en '+otro.pais+' '+anioCN(otro)+'. Usa ese congreso.');renderCongreso();return;}
+    if(otro){toast('Ya existe "'+otro.nombre+'" en '+otro.pais+' '+anioCN(otro)+'. Usa ese evento.');renderCongreso();return;}
     nv.clave=cl;
   }
   Object.assign(c,nv);saveCongresos(c);
   if(campo!=='notas')renderCongresos();
-  if(['fecha','pais','anio','mr'].indexOf(campo)!==-1)renderCongreso();
+  if(['fecha','pais','anio','mr','tipo'].indexOf(campo)!==-1)renderCongreso();
 }
 function addPartida(){var c=C_();if(!c)return;tocar();
   c.costos.push({id:'p'+Date.now().toString(36),cat:'stand',concepto:'',monto:''});saveCongresos(c);renderCongreso();}
@@ -2529,7 +2535,7 @@ function delPartida(i){var c=C_();if(!c)return;var x=c.costos[i];
   c.costos.splice(i,1);saveCongresos(c);renderCongreso();renderCongresos();}
 function borrarCongreso(){
   var c=C_();if(!c)return;
-  if(!confirm('¿Eliminar "'+(c.nombre||'este congreso')+'"? Los patrocinios de médicos del evento ligado no se tocan.'))return;
+  if(!confirm('¿Eliminar "'+(c.nombre||'este evento')+'"? Los patrocinios de médicos del evento ligado no se tocan.'))return;
   CONGRESOS=CONGRESOS.filter(function(x){return x.id!==c.id;});delCN(c.id);saveCongresos();
   curC=null;renderCongresos();renderCongreso();
 }
@@ -2557,13 +2563,13 @@ function opcionesLigar(c){
     .filter(function(e){return !CONGRESOS.some(function(x){return x.id!==c.id&&x.evento_id===e.id;});})
     .sort(function(a,b){return a.nombre<b.nombre?-1:1;});
   return '<option value="">Ligar con un evento de Patrocinios…</option>'
-    +'<option value="__nuevo">+ Crear evento de patrocinio para este congreso</option>'
+    +'<option value="__nuevo">+ Crear evento de patrocinio para este evento nacional</option>'
     +L.map(function(e){return '<option value="'+esc(e.id)+'">'+esc(lblEvento(e))+'</option>';}).join('');
 }
 function bloquePatCN(c){
   var e=eventoCN(c);
   if(!e)return '<div class="fg" style="max-width:420px"><select onchange="ligarEvento(this.value)">'+opcionesLigar(c)+'</select></div>'
-    +'<div class="lect">Si alg&uacute;n VM quiere patrocinar la inscripci&oacute;n o el viaje de un m&eacute;dico a este congreso, se registra en un evento de Patrocinios. '
+    +'<div class="lect">Si alg&uacute;n VM quiere patrocinar la inscripci&oacute;n o el viaje de un m&eacute;dico a este evento, se registra en un evento de Patrocinios. '
     +'Ese costo va al <b>centro de costo del VM del m&eacute;dico</b> y su solicitud la pide ese VM; no suma al presupuesto de pa&iacute;s.</div>';
   var ks=asistentes(e),porMR={};
   ks.forEach(function(k){var m=k.split('||')[0];porMR[m]=porMR[m]||{n:0,t:0};porMR[m].n++;porMR[m].t+=num(PLANES[k].patrocinio.monto);});
@@ -2571,7 +2577,7 @@ function bloquePatCN(c){
   var filas=Object.keys(porMR).sort().map(function(m){
     return '<div class="iv"><div class="cn2"><div class="nm2">'+esc(m)+'</div><div class="sb">'+porMR[m].n+' m&eacute;dico'+(porMR[m].n===1?'':'s')+' patrocinado'+(porMR[m].n===1?'':'s')+'</div></div>'
       +'<b style="font-variant-numeric:tabular-nums">'+fmtUSD(porMR[m].t)+'</b></div>';}).join('')
-    ||'<div class="vacio">Ning&uacute;n VM ha patrocinado m&eacute;dicos a este congreso todav&iacute;a.</div>';
+    ||'<div class="vacio">Ning&uacute;n VM ha patrocinado m&eacute;dicos a este evento todav&iacute;a.</div>';
   return '<div class="nota-v">Ligado a <b>'+esc(e.nombre)+'</b> en Patrocinios &middot; '+ks.length+' m&eacute;dico'+(ks.length===1?'':'s')+' &middot; '+fmtUSD(tot)
     +' &middot; <a href="#" onclick="irEvento(\''+jsq(e.id)+'\');return false">agregar o ver m&eacute;dicos</a>'
     +' &middot; <a href="#" onclick="if(confirm(\'¿Desligar el evento? Los patrocinios no se borran.\')){C_().evento_id=\'\';saveCongresos(C_());renderCongreso();}return false" style="color:var(--t3)">desligar</a></div>'
@@ -2583,9 +2589,10 @@ function solCN(c){
   var t=totalCN(c);
   if(!t)return '<div class="lect" style="margin-top:10px">Agrega las partidas para poder pedir la aprobaci&oacute;n en la app de gastos.</div>';
   var det=(c.costos||[]).filter(function(x){return num(x.monto);}).map(function(x){return catCN(x.cat).n+(x.concepto?' ('+x.concepto+')':'')+' US$ '+num(x.monto);}).join('; ');
-  return solBar('congreso:'+c.id,{tipo:'medicos',sub:'congreso_nac',
-    title:('Congreso nacional: '+c.nombre).slice(0,120),
-    just:'Plan de Acción. Participación institucional de Nutribén en '+c.nombre+(c.sede?' ('+c.sede+')':'')+'. Presupuesto de país, no de visitador. Partidas: '+det+'.',
+  var tp=tipoCN(c.tipo);
+  return solBar('congreso:'+c.id,{tipo:'medicos',sub:tp[2],
+    title:(tp[1]+': '+c.nombre).slice(0,120),
+    just:'Plan de Acción. Evento de estrategia nacional ('+tp[1].toLowerCase()+'): '+c.nombre+(c.sede?' ('+c.sede+')':'')+'. Presupuesto de país, no de visitador. Partidas: '+det+'.',
     ben:'Participación institucional · '+c.pais,date:c.fecha||'',usd:t,pais:c.pais,mr:c.mr||'',aud:'medicos',inst:''});
 }
 
@@ -2593,7 +2600,7 @@ function renderCongreso(){
   var box=$('cn-detalle');if(!box)return;
   if(CN_NUEVO){box.innerHTML=formNuevoCN();return;}
   var c=C_();
-  if(!c){box.innerHTML='<div class="empty"><div class="ic">🏛</div><div>Cada congreso nacional existe una sola vez por pa&iacute;s y a&ntilde;o.<br>Su costo va al presupuesto del pa&iacute;s, no al de ning&uacute;n visitador.</div></div>';return;}
+  if(!c){box.innerHTML='<div class="empty"><div class="ic">🏛</div><div>Congresos, jornadas y otros eventos de estrategia nacional.<br>Su costo va al presupuesto del pa&iacute;s, no al de ning&uacute;n visitador.</div></div>';return;}
   var t=totalCN(c),e=eventoCN(c),tp=e?totalEvento(e):0,np=e?asistentes(e).length:0;
   var mrs=cnMRs();if(c.mr&&mrs.indexOf(c.mr)===-1)mrs=[c.mr].concat(mrs);
   var part=(c.costos||[]).map(function(x,i){
@@ -2605,15 +2612,17 @@ function renderCongreso(){
   }).join('')||'<div class="vacio">Sin partidas todav&iacute;a.</div>';
   box.innerHTML=
    '<div class="dhead"><div style="flex:1;min-width:260px">'
-   +'<input type="text" class="tema-in" placeholder="Nombre del congreso…" value="'+esc(c.nombre)+'" onchange="setCN(\'nombre\',this.value.trim())" style="font-size:16px;font-weight:700">'
+   +'<input type="text" class="tema-in" placeholder="Nombre del evento…" value="'+esc(c.nombre)+'" onchange="setCN(\'nombre\',this.value.trim())" style="font-size:16px;font-weight:700">'
    +'<div style="margin-top:6px">'+chipEstado(c.fecha)+' <span class="tag-an">PRESUPUESTO DE PA&Iacute;S</span></div></div>'
-   +'<button class="btn btn-s" onclick="borrarCongreso()">Eliminar congreso</button></div>'
+   +'<button class="btn btn-s" onclick="borrarCongreso()">Eliminar evento</button></div>'
    +'<div class="sum">'
    +'<div class="su"><div class="v">'+fmtUSD(t)+'</div><div class="l">participaci&oacute;n institucional &middot; va a '+esc(c.pais||'pa&iacute;s')+'</div></div>'
    +'<div class="su"><div class="v">'+(e?fmtUSD(tp):'&mdash;')+'</div><div class="l">'+np+' m&eacute;dico'+(np===1?'':'s')+' patrocinado'+(np===1?'':'s')+' &middot; va a cada VM</div></div>'
    +'<div class="su"><div class="v" style="font-size:14px">'+esc(c.mr||'—')+'</div><div class="l">VM responsable</div></div>'
    +'</div>'
-   +'<div class="sec"><div class="sec-h"><h3>Datos del congreso</h3></div><div class="sec-b">'
+   +'<div class="sec"><div class="sec-h"><h3>Datos del evento</h3></div><div class="sec-b">'
+   +'<div class="fg" style="max-width:320px"><label>Tipo</label><select onchange="setCN(\'tipo\',this.value)">'
+     +TIPOS_CN.map(function(t){return '<option value="'+t[0]+'"'+((c.tipo||'congreso')===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select></div>'
    +'<div class="f3">'
    +'<div class="fg"><label>Pa&iacute;s</label><select onchange="setCN(\'pais\',this.value)">'
      +['Honduras','El Salvador'].map(function(p){return '<option'+(c.pais===p?' selected':'')+'>'+p+'</option>';}).join('')+'</select></div>'
@@ -2627,7 +2636,7 @@ function renderCongreso(){
    +'</div>'
    +'<div class="fg"><label>Notas</label><textarea placeholder="Qu&eacute; incluye el paquete, contacto de la asociaci&oacute;n, montaje…" onchange="setCN(\'notas\',this.value)">'+esc(c.notas)+'</textarea></div>'
    +'</div></div>'
-   +'<div class="sec"><div class="sec-h"><h3>Participaci&oacute;n institucional</h3><button class="btn btn-s" onclick="addPartida()">+ Agregar partida</button></div><div class="sec-b">'
+   +'<div class="sec"><div class="sec-h"><h3>Costo del evento &middot; presupuesto de pa&iacute;s</h3><button class="btn btn-s" onclick="addPartida()">+ Agregar partida</button></div><div class="sec-b">'
    +'<div class="cn-part">'+part+'</div>'
    +'<div class="rub-tot"><span>Total al presupuesto de '+esc(c.pais||'pa&iacute;s')+'</span><strong id="cn-tot">'+fmtUSD(t)+'</strong></div>'
    +solCN(c)
@@ -2638,20 +2647,20 @@ function renderCongreso(){
 }
 
 function exportCN(){
-  if(!CONGRESOS.length){toast('No hay congresos nacionales');return;}
-  var H=['Congreso','País','Sede','Inicio','Fin','Año','Estado','VM responsable','Partida','Detalle','US$ (presupuesto de país)','Médicos patrocinados','US$ patrocinios (en cada VM)'];
+  if(!CONGRESOS.length){toast('No hay eventos nacionales');return;}
+  var H=['Evento','Tipo','País','Sede','Inicio','Fin','Año','Estado','VM responsable','Partida','Detalle','US$ (presupuesto de país)','Médicos patrocinados','US$ patrocinios (en cada VM)'];
   var R=[];
   CONGRESOS.slice().sort(function(a,b){return (a.fecha||a.anio||'')<(b.fecha||b.anio||'')?-1:1;}).forEach(function(c){
     var e=eventoCN(c),np=e?asistentes(e).length:0,tp=e?totalEvento(e):0;
-    var base=[c.nombre,c.pais,c.sede,c.fecha||'',c.fecha_fin||'',anioCN(c),EST_NOM[estadoFecha(c.fecha)],c.mr];
+    var base=[c.nombre,tipoCN(c.tipo)[1],c.pais,c.sede,c.fecha||'',c.fecha_fin||'',anioCN(c),EST_NOM[estadoFecha(c.fecha)],c.mr];
     var L=(c.costos||[]).filter(function(x){return num(x.monto)||x.concepto;});
     if(!L.length){R.push(base.concat(['','',0,np,tp]));return;}
     L.forEach(function(x,i){R.push(base.concat([catCN(x.cat).n,x.concepto||'',num(x.monto),i?'':np,i?'':tp]));});
   });
   var ws=XLSX.utils.aoa_to_sheet([H].concat(R));
   ws['!cols']=H.map(function(h,i){return {wch:i===0?34:i===9?34:14};});
-  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Congresos nacionales');
-  XLSX.writeFile(wb,'Congresos_Nacionales_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Eventos nacionales');
+  XLSX.writeFile(wb,'Eventos_Nacionales_'+new Date().toISOString().slice(0,10)+'.xlsx');
   toast('Excel generado');
 }
 
@@ -2670,30 +2679,30 @@ function tablaCN(CN){
   if(!CN.si.length)return '';
   var porPais={};CN.si.forEach(function(c){porPais[c.pais]=(porPais[c.pais]||0)+totalCN(c);});
   var tot=CN.si.reduce(function(a,c){return a+totalCN(c);},0);
-  return '<div class="ptit" style="margin-top:22px">PRESUPUESTO DE PA&Iacute;S &middot; CONGRESOS NACIONALES</div>'
-   +'<table class="ptab"><thead><tr><th>Congreso</th><th>Pa&iacute;s</th><th>Fecha</th><th>Responsable</th><th>Participaci&oacute;n institucional</th></tr></thead><tbody>'
-   +CN.si.map(function(c){return '<tr style="cursor:pointer" onclick="irCongreso(\''+jsq(c.id)+'\')"><td>'+esc(c.nombre)+'</td><td>'+esc(c.pais)+'</td><td>'
+  return '<div class="ptit" style="margin-top:22px">PRESUPUESTO DE PA&Iacute;S &middot; EVENTOS NACIONALES</div>'
+   +'<table class="ptab"><thead><tr><th>Evento</th><th>Tipo</th><th>Pa&iacute;s</th><th>Fecha</th><th>Responsable</th><th>Costo (pa&iacute;s)</th></tr></thead><tbody>'
+   +CN.si.map(function(c){return '<tr style="cursor:pointer" onclick="irCongreso(\''+jsq(c.id)+'\')"><td>'+esc(c.nombre)+'</td><td>'+tipoCN(c.tipo)[1]+'</td><td>'+esc(c.pais)+'</td><td>'
      +(c.fecha?fDia(c.fecha):'a&ntilde;o '+esc(anioCN(c)))+'</td><td>'+esc(c.mr||'—')+'</td><td style="font-weight:700;color:var(--azul)">'+fmtUSD(totalCN(c))+'</td></tr>';}).join('')
-   +'</tbody><tfoot><tr><td>Total congresos nacionales</td><td colspan="3" style="text-align:left;font-weight:600">'
+   +'</tbody><tfoot><tr><td>Total eventos nacionales</td><td colspan="4" style="text-align:left;font-weight:600">'
    +Object.keys(porPais).sort().map(function(p){return esc(p)+' '+fmtUSD(porPais[p]);}).join(' &middot; ')+'</td><td>'+fmtUSD(tot)+'</td></tr></tfoot></table>'
-   +'<div class="lect" style="margin-top:10px">Los congresos nacionales son presupuesto del pa&iacute;s: no se suman a ning&uacute;n visitador ni se prorratean. '
-   +'Los patrocinios de m&eacute;dicos a estos congresos s&iacute; est&aacute;n en la columna Patrocinio del VM de cada m&eacute;dico.</div>';
+   +'<div class="lect" style="margin-top:10px">Los eventos nacionales son presupuesto del pa&iacute;s: no se suman a ning&uacute;n visitador ni se prorratean. '
+   +'Los patrocinios de m&eacute;dicos a estos eventos s&iacute; est&aacute;n en la columna Patrocinio del VM de cada m&eacute;dico.</div>';
 }
 
 /* ── Supabase ── */
 function deCN(r){
-  return {id:r.id,clave:r.clave||'',nombre:r.nombre||'',pais:r.pais||'',sede:r.sede||'',fecha:r.fecha||'',fecha_fin:r.fecha_fin||'',
+  return {id:r.id,clave:r.clave||'',tipo:r.tipo||'congreso',nombre:r.nombre||'',pais:r.pais||'',sede:r.sede||'',fecha:r.fecha||'',fecha_fin:r.fecha_fin||'',
     anio:r.anio?String(r.anio):'',mr:r.mr||'',costos:Array.isArray(r.costos)?r.costos:[],evento_id:r.evento_id||'',notas:r.notas||''};
 }
 function pushCN(c){
   if(!ONLINE)return;
-  sb.from('congresos').upsert({id:c.id,clave:c.clave||claveCN(c.nombre,c.pais,anioCN(c)),nombre:c.nombre||'',pais:c.pais||'',sede:c.sede||'',
+  sb.from('congresos').upsert({id:c.id,clave:c.clave||claveCN(c.nombre,c.pais,anioCN(c)),tipo:c.tipo||'congreso',nombre:c.nombre||'',pais:c.pais||'',sede:c.sede||'',
     fecha:c.fecha||null,fecha_fin:c.fecha_fin||null,anio:num(anioCN(c))||null,mr:c.mr||'',costos:c.costos||[],
     evento_id:c.evento_id||null,notas:c.notas||'',actualizado:new Date().toISOString()
   }).then(function(r){
     if(!r.error)return;
     console.error(r.error);
-    toast(r.error.code==='23505'?'Ya existe un congreso con ese nombre en ese país y año. Recarga y usa ese.':'No se pudo guardar el congreso');
+    toast(r.error.code==='23505'?'Ya existe un evento con ese nombre en ese país y año. Recarga y usa ese.':'No se pudo guardar el evento nacional');
   });
 }
 function delCN(id){if(ONLINE)sb.from('congresos').delete().eq('id',id).then(function(){});}
@@ -3032,7 +3041,7 @@ function calendarioPresu(anio){
   CONGRESOS.forEach(function(c){
     if(pf&&c.pais!==pf)return;
     if(clasifica(c.fecha,c.anio,anio)!=='si')return;
-    poner(NAC_PRE+c.pais,c.fecha,totalCN(c),false,{tipo:'congreso',quien:c.nombre||'Congreso nacional',det:'Responsable: '+(c.mr||'—'),
+    poner(NAC_PRE+c.pais,c.fecha,totalCN(c),false,{tipo:'congreso',quien:tipoCN(c.tipo)[1]+' · '+(c.nombre||''),det:'Responsable: '+(c.mr||'—'),
       ir:'irCongreso(\''+jsq(c.id)+'\')'});
   });
   var nac=function(f){return f.mr.indexOf(NAC_PRE)===0?1:0;};
@@ -3042,7 +3051,7 @@ function calendarioPresu(anio){
 }
 
 var CAL_ULT=null;
-var CAL_TIPO={patrocinio:'Patrocinio',oneone:'One to one',mm:'Muestras m\u00e9dicas',material:'Material',sol:'Solicitud puntual',mesa:'Mesa redonda',summit:'Summit local',congreso:'Congreso nacional'};
+var CAL_TIPO={patrocinio:'Patrocinio',oneone:'One to one',mm:'Muestras m\u00e9dicas',material:'Material',sol:'Solicitud puntual',mesa:'Mesa redonda',summit:'Summit local',congreso:'Evento nacional'};
 /* i = fila (-1 = todos los visitadores); mes = 0-11, -1 sin mes, 'tot' todo el año */
 function verCelda(i,mes){
   if(!CAL_ULT)return;
@@ -3160,9 +3169,9 @@ function renderPresu(){
    +'<div class="pc"><div class="v">'+fmtUSD(T.planes)+'</div><div class="l">en planes por m&eacute;dico &middot; '+pct(T.planes)+'</div></div>'
    +'<div class="pc"><div class="v">'+fmtUSD(T.mesas)+'</div><div class="l">en '+T.nMesas+' mesas redondas &middot; '+pct(T.mesas)+'</div></div>'
    +'<div class="pc"><div class="v">'+fmtUSD(T.summits)+'</div><div class="l">en '+T.nSummits+' summits &middot; '+pct(T.summits)+'</div></div>'
-   +'<div class="pc"><div class="v">'+fmtUSD(TN)+'</div><div class="l">en '+CN.si.length+' congresos nacionales (pa&iacute;s) &middot; '+pct(TN)+'</div></div>'
+   +'<div class="pc"><div class="v">'+fmtUSD(TN)+'</div><div class="l">en '+CN.si.length+' eventos nacionales (pa&iacute;s) &middot; '+pct(TN)+'</div></div>'
    +'</div>'
-   +(actual&&TNS?'<div class="warn-v" style="margin-bottom:14px"><b>'+fmtUSD(TNS)+'</b> en congresos nacionales sin fecha ni a&ntilde;o no est&aacute;n incluidos en '+esc(actual)+'.</div>':'')
+   +(actual&&TNS?'<div class="warn-v" style="margin-bottom:14px"><b>'+fmtUSD(TNS)+'</b> en eventos nacionales sin fecha ni a&ntilde;o no est&aacute;n incluidos en '+esc(actual)+'.</div>':'')
    +(conSF?'<div class="warn-v" style="margin-bottom:14px"><b>'+fmtUSD(T.sinf)+' sin fecha</b> no est&aacute;n incluidos en '+esc(actual)
      +'. Son patrocinios, one to one, solicitudes, mesas o summits a los que todav&iacute;a no se les puso fecha ni a&ntilde;o. '
      +'Elige &laquo;Todos los a&ntilde;os&raquo; para verlos sumados, o ponles fecha para que caigan en su a&ntilde;o.</div>':'')
@@ -3192,7 +3201,7 @@ function renderPresu(){
       ?'completos al MR responsable del evento'
       :'en proporci&oacute;n a los invitados que aport&oacute; cada MR')+'.</div>'
    +tablaCN(CN)
-   +(TN?'<div class="lect" style="margin-top:10px;font-size:13px"><b>Total '+esc(etq)+(paisPresu()?' &middot; '+esc(paisPresu()):'')+':</b> visitadores '+fmtUSD(T.total)+' + congresos nacionales '+fmtUSD(TN)+' = <b>'+fmtUSD(G)+'</b></div>':'')
+   +(TN?'<div class="lect" style="margin-top:10px;font-size:13px"><b>Total '+esc(etq)+(paisPresu()?' &middot; '+esc(paisPresu()):'')+':</b> visitadores '+fmtUSD(T.total)+' + eventos nacionales '+fmtUSD(TN)+' = <b>'+fmtUSD(G)+'</b></div>':'')
    +tablaCalendario(actual);
 }
 
@@ -3210,7 +3219,7 @@ function exportPresu(){
   R.push([]);
   var tot=['TOTAL VISITADORES'];for(var i=1;i<H.length;i++)tot.push(suma(i));R.push(tot);
   var CNx=cnPresu(anio),TNx=CNx.si.reduce(function(a,c){return a+totalCN(c);},0);
-  if(TNx){var rn=['Congresos nacionales (presupuesto de país)'],rg=['TOTAL CON CONGRESOS NACIONALES'];
+  if(TNx){var rn=['Eventos nacionales (presupuesto de país)'],rg=['TOTAL CON EVENTOS NACIONALES'];
     for(var i2=1;i2<H.length;i2++){rn.push(i2===14?Math.round(TNx):'');rg.push(i2===14?Math.round(tot[14]+TNx):'');}
     R.push(rn);R.push(rg);}
   R.push([]);
@@ -3251,12 +3260,12 @@ function exportPresu(){
   wsS['!cols']=[{wch:22},{wch:26},{wch:12},{wch:40},{wch:22},{wch:13},{wch:11}];
   XLSX.utils.book_append_sheet(wb,wsS,'Solicitudes');
   if(CNx.si.length){
-    var HN=['Congreso','País','Fecha','Responsable','Partida','Detalle','US$'],RN=[];
+    var HN=['Evento','Tipo','País','Fecha','Responsable','Partida','Detalle','US$'],RN=[];
     CNx.si.forEach(function(c){(c.costos||[]).filter(function(x){return num(x.monto);}).forEach(function(x){
-      RN.push([c.nombre,c.pais,c.fecha||anioCN(c),c.mr,catCN(x.cat).n,x.concepto||'',num(x.monto)]);});});
-    RN.push([]);RN.push(['TOTAL','','','','','',Math.round(TNx)]);
+      RN.push([c.nombre,tipoCN(c.tipo)[1],c.pais,c.fecha||anioCN(c),c.mr,catCN(x.cat).n,x.concepto||'',num(x.monto)]);});});
+    RN.push([]);RN.push(['TOTAL','','','','','','',Math.round(TNx)]);
     var wsN=XLSX.utils.aoa_to_sheet([HN].concat(RN));wsN['!cols']=[{wch:34},{wch:12},{wch:12},{wch:22},{wch:24},{wch:34},{wch:11}];
-    XLSX.utils.book_append_sheet(wb,wsN,'Congresos nacionales');
+    XLSX.utils.book_append_sheet(wb,wsN,'Eventos nacionales');
   }
   XLSX.writeFile(wb,'Presupuesto_Nutriben_'+(anio||'todos')+'_'+(paisPresu()?paisPresu().replace(' ','_')+'_':'')+new Date().toISOString().slice(0,10)+'.xlsx');
   toast('Excel generado');
