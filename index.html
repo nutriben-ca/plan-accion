@@ -442,6 +442,13 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
       <option>TIER 3</option><option>TIER 4</option>
     </select>
   </label>
+  <label>Patr&oacute;n
+    <select id="f-pat" onchange="renderList()">
+      <option value="">Todos</option><option>Terreno virgen</option><option>Abandono temprano</option>
+      <option>Abandono reciente</option><option>Patr&oacute;n intermitente</option><option>Activo reciente</option>
+      <option>Lealtad fraccionada</option><option>Lealtad consolidada</option>
+    </select>
+  </label>
   <label>Estado
     <select id="f-est" onchange="renderList()">
       <option value="">Todos</option><option value="con">Con plan</option><option value="pat">Con patrocinio</option><option value="anio">Con actividad en el a&ntilde;o</option><option value="sin">Sin plan</option>
@@ -895,7 +902,7 @@ function pickMR(){cur=null;renderList();$('detalle').innerHTML=
 function filtrados(){
   var mr=$('f-mr').value,seg=$('f-seg').value,tier=$('f-tier').value,
       est=$('f-est').value,q=($('f-q').value||'').toLowerCase(),
-      dat=$('f-dat')?$('f-dat').value:'',tipo=$('f-tipo')?$('f-tipo').value:'';
+      dat=$('f-dat')?$('f-dat').value:'',tipo=$('f-tipo')?$('f-tipo').value:'',pat=$('f-pat')?$('f-pat').value:'';
   if(!mr)return [];
   return DATA.filter(function(d){
     if(!enVista(d,mr))return false;
@@ -908,6 +915,7 @@ function filtrados(){
     if(dat==='rad'&&!radarPend(key(d)))return false;
     if(seg&&d.seg!==seg)return false;
     if(tier&&d.tier!==tier)return false;
+    if(pat&&(d.contacto||d.patron!==pat))return false; /* solo médicos: los profesionales no tienen patrón */
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
     var tiene=!!PLANES[key(d)];
     if(est==='con'&&!tiene)return false;
@@ -1590,7 +1598,7 @@ function irEvento(id){vista('pyo');setPyo('ev');$('e-est').value='';curE=id;rend
 function irPlan(k){
   var d=byKey(k);if(!d){toast('Ese médico ya no está en la cartera');return;}
   vista('planes');$('f-mr').value=d.mr;
-  ['f-seg','f-tier','f-est','f-dat'].forEach(function(id){if($(id))$(id).value='';});
+  ['f-seg','f-tier','f-pat','f-est','f-dat'].forEach(function(id){if($(id))$(id).value='';});
   if($('f-q'))$('f-q').value='';
   pickMR();abrir(k);
 }
