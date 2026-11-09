@@ -1356,9 +1356,11 @@ function exportar(){
   if(!mr){toast('Selecciona primero tu nombre');return;}
   /* Respeta los filtros de la barra (y la búsqueda): exporta lo que se ve en la lista */
   var filt=filtrosActivos();
-  var cartera=filtrados().filter(function(d){return PLANES[key(d)];});
-  if(!cartera.length){toast(filt.length?'Ninguno de los médicos filtrados tiene plan guardado':'Aún no hay planes guardados');return;}
-  var H=['Visitador','Médico','Especialidad','País','Segmento','Tier','Score','Rx/sem','Rx pond.','Calidad %',
+  /* Salen todos los médicos de la lista, tengan plan o no (columna "Con plan") */
+  var cartera=filtrados();
+  if(!cartera.length){toast('No hay médicos con estos filtros');return;}
+  var nPlan=cartera.filter(function(d){return PLANES[key(d)];}).length;
+  var H=['Visitador','Médico','Especialidad','País','Segmento','Tier','Con plan','Score','Rx/sem','Rx pond.','Calidad %',
     'Natal PRO-α','Confort','Arroz Hidrol.','Crecimiento','Sin Lactosa','Hueco de portafolio',
     'Patrón competitivo','Objetivo del ciclo',
     'Patrocinio','Evento','Fecha patroc.','US$ patrocinio',
@@ -1368,10 +1370,10 @@ function exportar(){
     'Material','Piezas','US$ material','Solicitudes puntuales','US$ solicitudes',
     'INVERSIÓN ANUAL US$','Notas'];
   var R=cartera.map(function(d){
-    var p=PLANES[key(d)],a=analizar(d);
+    var tp=!!PLANES[key(d)],p=PLANES[key(d)]||{},a=analizar(d);
     var g=function(t,c){return p[t]&&p[t].activo?(p[t][c]||''):'';};
     var act=function(t){return p[t]&&p[t].activo?'Sí':'';};
-    return [d.mr,d.n,d.esp,d.pais,d.seg,d.tier,d.score,a.ini,d.rx_ef,d.calidad,
+    return [d.mr,d.n,d.esp,d.pais,d.seg,d.tier,tp?'Sí':'No',d.score,a.ini,d.rx_ef,d.calidad,
       d.e1,d.hidparc,d.hidext,d.e3,d.sl,PROD[a.hueco].n,d.patron,p.objetivo||'',
       act('patrocinio'),(act('patrocinio')?(eventoDe(p.patrocinio)?eventoDe(p.patrocinio).nombre:(p.patrocinio.evento||'')):''),(act('patrocinio')?fechaPat(p.patrocinio):''),num(g('patrocinio','monto')),
       (mesasDe(key(d)).length?'Sí':act('mesa')),mesasDe(key(d)).map(function(m){return m.tema;}).join(' | '),mesasDe(key(d)).map(function(m){return m.sede;}).join(' | '),mesasDe(key(d)).map(function(m){return m.fecha;}).join(' | '),0,
@@ -1381,18 +1383,18 @@ function exportar(){
       (p.solicitudes||[]).length,totalSol(p),
       totalPlan(p),p.notas||''];
   });
-  var tot=R.reduce(function(a,r){return a+r[41];},0);
+  var tot=R.reduce(function(a,r){return a+r[42];},0);
   var nomMR=esGlob(mr)?VISTAS_GLOB[mr].n:mr;
-  var filaTot=['TOTAL '+nomMR];for(var q=1;q<41;q++)filaTot.push('');filaTot.push(tot);
+  var filaTot=['TOTAL '+nomMR];for(var q=1;q<42;q++)filaTot.push('');filaTot.push(tot);
   var ws=XLSX.utils.aoa_to_sheet([H].concat(R).concat([[],filaTot]));
-  ws['!cols']=H.map(function(h,i){return {wch:i===0?18:i===1?26:i===17?34:i===23||i===28?40:i===42?38:13};});
+  ws['!cols']=H.map(function(h,i){return {wch:i===0?18:i===1?26:i===18?34:i===24||i===29?40:i===43?38:13};});
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,esGlob(mr)?'Planes '+VISTAS_GLOB[mr].f.replace('_',' '):'Plan '+mr.split(' ')[0]);
 
   var HS=['Visitador','Médico','Fecha','Concepto','Categoría','Estado','US$'];
   var RS=[];
   cartera.forEach(function(d){
-    (PLANES[key(d)].solicitudes||[]).forEach(function(x){
+    ((PLANES[key(d)]||{}).solicitudes||[]).forEach(function(x){
       var c=CATSOL.filter(function(y){return y.k===x.cat;})[0];
       RS.push([d.mr,d.n,x.fecha||'',x.concepto||'',c?c.n:x.cat||'',x.estado||'',num(x.monto)]);
     });
@@ -1406,12 +1408,12 @@ function exportar(){
     XLSX.utils.book_append_sheet(wb,wsS,'Solicitudes');
   }
   var HF=[['Filtro','Selección']].concat([['Visitador',$('f-mr').selectedOptions[0]?$('f-mr').selectedOptions[0].text:mr],['Año del plan',ANIO_PLAN]])
-    .concat(filt.length?filt:[['(sin filtros)','Todos los médicos con plan']])
-    .concat([[],['Médicos con plan exportados',cartera.length]]);
+    .concat(filt.length?filt:[['(sin filtros)','Toda la cartera del visitador']])
+    .concat([[],['Médicos exportados',cartera.length],['Con plan guardado',nPlan],['Sin plan',cartera.length-nPlan]]);
   var wsF=XLSX.utils.aoa_to_sheet(HF);wsF['!cols']=[{wch:28},{wch:60}];
   XLSX.utils.book_append_sheet(wb,wsF,'Filtros');
   XLSX.writeFile(wb,'Plan_Accion_'+ANIO_PLAN+'_'+(esGlob(mr)?VISTAS_GLOB[mr].f:mr.replace(/\s+/g,'_'))+(filt.length?'_filtrado':'')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  toast('Excel generado: '+cartera.length+' médico'+(cartera.length===1?'':'s')+(filt.length?' (con filtros)':''));
+  toast('Excel generado: '+cartera.length+' médico'+(cartera.length===1?'':'s')+' · '+nPlan+' con plan');
 }
 
 /* ── INIT ──────────────────────────────────────────────────── */
