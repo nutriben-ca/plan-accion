@@ -33,6 +33,18 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 /* BARRA MR */
 .mrbar{background:var(--w);border-bottom:1px solid var(--ln);padding:10px 18px;
   display:flex;gap:9px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:30}
+.ms{position:relative;display:inline-block}
+.ms-b{font:inherit;font-size:12px;font-weight:500;color:var(--t1,#1d2433);background:var(--w);border:1px solid var(--ln);border-radius:6px;
+  padding:5px 26px 5px 9px;min-width:84px;max-width:190px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.ms-b:after{content:'';position:absolute;right:9px;top:50%;margin-top:-3px;border:4px solid transparent;border-top-color:currentColor;border-bottom:0}
+.ms-b.on{border-color:#0033A1;background:#eef3fc;color:#0033A1;font-weight:600}
+.ms-p{display:none;position:absolute;z-index:60;top:calc(100% + 4px);left:0;min-width:200px;background:var(--w);border:1px solid var(--ln);
+  border-radius:8px;box-shadow:0 8px 24px rgba(0,30,90,.14);padding:5px}
+.ms.open .ms-p{display:block}
+.ms-i{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:5px;font-size:12.5px;font-weight:500;color:var(--t1,#1d2433);cursor:pointer;white-space:nowrap}
+.ms-i:hover{background:var(--bg)}
+.ms-i input{margin:0;width:15px;height:15px;accent-color:#0033A1}
+.ms-t{border-bottom:1px solid var(--ln);margin-bottom:3px;padding-bottom:8px;color:var(--t2)}
 .mrbar label{font-size:10.5px;color:var(--t2);font-weight:600;display:flex;align-items:center;gap:5px}
 select,input[type=text],input[type=number],textarea{font-family:inherit;font-size:12px;
   border:1.5px solid var(--ln);border-radius:6px;padding:6px 9px;outline:none;background:var(--w);color:var(--t1)}
@@ -899,29 +911,71 @@ function enVista(d,mr){var g=VISTAS_GLOB[mr];if(g)return !g.pais||d.pais===g.pai
 function pickMR(){cur=null;renderList();$('detalle').innerHTML=
   '<div class="empty"><div class="ic">&#128203;</div><div>Selecciona un m&eacute;dico de la lista para construir su plan.</div></div>';}
 
+/* ── Selectores de opción múltiple (Segmento, Tier, Patrón, Estado, Datos, Tipo) ──
+   El <select> original queda oculto como fuente de opciones (sus textos pueden
+   cambiar, p. ej. Estado según el año); lo elegido se guarda en data-m. */
+var MS_IDS=['f-seg','f-tier','f-pat','f-est','f-dat','f-tipo'];
+function msv(id){var e=$(id);if(!e)return [];try{return JSON.parse(e.dataset.m||'[]');}catch(_){return [];}}
+function msSet(id,arr){var e=$(id);if(!e)return;e.dataset.m=JSON.stringify(arr||[]);msPinta(id);}
+function msCorto(t){return String(t).split(' — ')[0].trim();}
+function msPinta(id){
+  var e=$(id),b=$(id+'-ms');if(!e||!b)return;var v=msv(id);
+  var txt=v.map(function(x){var o=[].filter.call(e.options,function(z){return z.value===x;})[0];return o?msCorto(o.text):x;});
+  var lb=b.querySelector('.ms-b');
+  lb.textContent=!v.length?'Todos':(v.length<=3?txt.join(', '):v.length+' seleccionados');
+  lb.title=txt.join(', ');lb.classList.toggle('on',v.length>0);
+  if(b.classList.contains('open'))msLista(id);
+}
+function msLista(id){
+  var e=$(id),b=$(id+'-ms'),v=msv(id);
+  b.querySelector('.ms-p').innerHTML='<label class="ms-i ms-t"><input type="checkbox"'+(v.length?'':' checked')+' onchange="msTodos(\''+id+'\')">Todos</label>'
+    +[].filter.call(e.options,function(o){return o.value!=='';}).map(function(o){
+      return '<label class="ms-i"><input type="checkbox" value="'+esc(o.value)+'"'+(v.indexOf(o.value)!==-1?' checked':'')
+        +' onchange="msTog(\''+id+'\',this.value,this.checked)">'+esc(o.text)+'</label>';}).join('');
+}
+function msTog(id,val,on){var v=msv(id).filter(function(x){return x!==val;});if(on)v.push(val);
+  var e=$(id),orden=[].map.call(e.options,function(o){return o.value;});
+  v.sort(function(a,b){return orden.indexOf(a)-orden.indexOf(b);});
+  msSet(id,v);renderList();}
+function msTodos(id){msSet(id,[]);renderList();}
+function msInit(){
+  MS_IDS.forEach(function(id){var e=$(id);if(!e||$(id+'-ms'))return;
+    e.style.display='none';if(!e.dataset.m)e.dataset.m='[]';
+    var w=document.createElement('span');w.className='ms';w.id=id+'-ms';
+    w.innerHTML='<button type="button" class="ms-b">Todos</button><div class="ms-p"></div>';
+    w.querySelector('.ms-b').onclick=function(ev){ev.preventDefault();
+      var abierto=w.classList.contains('open');
+      document.querySelectorAll('.ms.open').forEach(function(x){x.classList.remove('open');});
+      if(!abierto){msLista(id);w.classList.add('open');}};
+    e.parentNode.insertBefore(w,e.nextSibling);msPinta(id);});
+  document.addEventListener('click',function(ev){if(!ev.target.closest||!ev.target.closest('.ms'))
+    document.querySelectorAll('.ms.open').forEach(function(x){x.classList.remove('open');});});
+  document.addEventListener('keydown',function(ev){if(ev.key==='Escape')document.querySelectorAll('.ms.open').forEach(function(x){x.classList.remove('open');});});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',msInit);else setTimeout(msInit,0);
+
 function filtrados(){
-  var mr=$('f-mr').value,seg=$('f-seg').value,tier=$('f-tier').value,
-      est=$('f-est').value,q=($('f-q').value||'').toLowerCase(),
-      dat=$('f-dat')?$('f-dat').value:'',tipo=$('f-tipo')?$('f-tipo').value:'',pat=$('f-pat')?$('f-pat').value:'';
+  var mr=$('f-mr').value,seg=msv('f-seg'),tier=msv('f-tier'),
+      est=msv('f-est'),q=($('f-q').value||'').toLowerCase(),
+      dat=msv('f-dat'),tipo=msv('f-tipo'),pat=msv('f-pat');
+  /* Dentro de cada selector las opciones se suman (A o B1 o B2); entre selectores se cruzan. */
   if(!mr)return [];
   return DATA.filter(function(d){
     if(!enVista(d,mr))return false;
-    if(tipo==='med'&&d.contacto)return false;
-    if(tipo&&tipo!=='med'&&!(d.contacto&&d.contacto.tipo===tipo))return false;
-    if(dat&&d.contacto)return false;
-    if(dat==='con'&&d.sin_datos)return false;
-    if(dat==='sin'&&!d.sin_datos)return false;
-    if(dat==='fm'&&!d.fuera_maestro)return false;
-    if(dat==='rad'&&!radarPend(key(d)))return false;
-    if(seg&&d.seg!==seg)return false;
-    if(tier&&d.tier!==tier)return false;
-    if(pat&&(d.contacto||d.patron!==pat))return false; /* solo médicos: los profesionales no tienen patrón */
+    if(tipo.length&&!tipo.some(function(t){return t==='med'?!d.contacto:!!(d.contacto&&d.contacto.tipo===t);}))return false;
+    if(dat.length){if(d.contacto)return false;
+      if(!dat.some(function(x){return x==='con'?!d.sin_datos:x==='sin'?!!d.sin_datos:x==='fm'?!!d.fuera_maestro:x==='rad'?!!radarPend(key(d)):false;}))return false;}
+    if(seg.length&&seg.indexOf(d.seg)===-1)return false;
+    if(tier.length&&tier.indexOf(d.tier)===-1)return false;
+    if(pat.length&&(d.contacto||pat.indexOf(d.patron)===-1))return false; /* solo médicos: los profesionales no tienen patrón */
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
-    var tiene=!!PLANES[key(d)];
-    if(est==='con'&&!tiene)return false;
-    if(est==='sin'&&tiene)return false;
-    if(est==='pat'){var pp=PLANES[key(d)];if(!(pp&&pp.patrocinio&&pp.patrocinio.activo&&anioTac('patrocinio',pp.patrocinio)!==null&&enAnio(anioTac('patrocinio',pp.patrocinio))))return false;}
-    if(est==='anio'&&!actsAnio(key(d),anioVista()))return false;
+    if(est.length){var tiene=!!PLANES[key(d)],pp=PLANES[key(d)];
+      if(!est.some(function(x){
+        if(x==='con')return tiene;
+        if(x==='sin')return !tiene;
+        if(x==='pat')return !!(pp&&pp.patrocinio&&pp.patrocinio.activo&&anioTac('patrocinio',pp.patrocinio)!==null&&enAnio(anioTac('patrocinio',pp.patrocinio)));
+        if(x==='anio')return !!actsAnio(key(d),anioVista());
+        return true;}))return false;}
     return true;
   }).sort(function(a,b){
     if(!!a.contacto!==!!b.contacto)return a.contacto?1:-1;
@@ -1598,7 +1652,7 @@ function irEvento(id){vista('pyo');setPyo('ev');$('e-est').value='';curE=id;rend
 function irPlan(k){
   var d=byKey(k);if(!d){toast('Ese médico ya no está en la cartera');return;}
   vista('planes');$('f-mr').value=d.mr;
-  ['f-seg','f-tier','f-pat','f-est','f-dat'].forEach(function(id){if($(id))$(id).value='';});
+  ['f-seg','f-tier','f-pat','f-est','f-dat'].forEach(function(id){msSet(id,[]);});
   if($('f-q'))$('f-q').value='';
   pickMR();abrir(k);
 }
@@ -2909,6 +2963,7 @@ function pintaAnioPlanes(){
   sel.innerHTML=anios.map(function(x){return '<option'+(x===ANIO_PLAN?' selected':'')+'>'+x+'</option>';}).join('');
   var o=$('f-est')&&$('f-est').querySelector('option[value="anio"]');
   if(o)o.textContent='Con actividad en '+ANIO_PLAN;
+  if(typeof msPinta==='function')msPinta('f-est');
   var oc=$('f-est')&&$('f-est').querySelector('option[value="con"]');
   if(oc)oc.textContent='Con plan '+ANIO_PLAN;
   var os=$('f-est')&&$('f-est').querySelector('option[value="sin"]');
@@ -3492,7 +3547,7 @@ function guardarContacto(){
     cerrarContacto();
     if(!editando&&RD_PEND){var oe=envios(),pe=oe[RD_PEND];delete oe[RD_PEND];if(pe)oe[mr+'||'+nombre]={o:pe.o,tac:pe.tac||[],t:pe.t};setEnvios(oe);RD_PEND=null;actPend();}
     cargarContactos().then(function(){
-      if(!editando){$('f-mr').value=mr;$('f-tipo').value='';}
+      if(!editando){$('f-mr').value=mr;msSet('f-tipo',[]);}
       renderList();abrir(mr+'||'+nombre);toast(editando?'Profesional actualizado':'Profesional agregado');
     });
   });
