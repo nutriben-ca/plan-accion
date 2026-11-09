@@ -954,6 +954,13 @@ function msInit(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',msInit);else setTimeout(msInit,0);
 
+function filtrosActivos(){
+  var nom={'f-seg':'Segmento','f-tier':'Tier','f-pat':'Patrón','f-est':'Estado','f-dat':'Datos','f-tipo':'Tipo'},out=[];
+  MS_IDS.forEach(function(id){var e=$(id),v=msv(id);if(!e||!v.length)return;
+    out.push([nom[id],v.map(function(x){var o=[].filter.call(e.options,function(z){return z.value===x;})[0];return o?o.text:x;}).join(', ')]);});
+  var q=($('f-q')&&$('f-q').value||'').trim();if(q)out.push(['Búsqueda',q]);
+  return out;
+}
 function filtrados(){
   var mr=$('f-mr').value,seg=msv('f-seg'),tier=msv('f-tier'),
       est=msv('f-est'),q=($('f-q').value||'').toLowerCase(),
@@ -1347,8 +1354,10 @@ function borrar(){
 function exportar(){
   var mr=$('f-mr').value;
   if(!mr){toast('Selecciona primero tu nombre');return;}
-  var cartera=DATA.filter(function(d){return enVista(d,mr)&&PLANES[key(d)];});
-  if(!cartera.length){toast('Aún no hay planes guardados');return;}
+  /* Respeta los filtros de la barra (y la búsqueda): exporta lo que se ve en la lista */
+  var filt=filtrosActivos();
+  var cartera=filtrados().filter(function(d){return PLANES[key(d)];});
+  if(!cartera.length){toast(filt.length?'Ninguno de los médicos filtrados tiene plan guardado':'Aún no hay planes guardados');return;}
   var H=['Visitador','Médico','Especialidad','País','Segmento','Tier','Score','Rx/sem','Rx pond.','Calidad %',
     'Natal PRO-α','Confort','Arroz Hidrol.','Crecimiento','Sin Lactosa','Hueco de portafolio',
     'Patrón competitivo','Objetivo del ciclo',
@@ -1396,8 +1405,13 @@ function exportar(){
     wsS['!cols']=[{wch:18},{wch:26},{wch:12},{wch:42},{wch:22},{wch:13},{wch:11}];
     XLSX.utils.book_append_sheet(wb,wsS,'Solicitudes');
   }
-  XLSX.writeFile(wb,'Plan_Accion_'+ANIO_PLAN+'_'+(esGlob(mr)?VISTAS_GLOB[mr].f:mr.replace(/\s+/g,'_'))+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  toast('Excel generado');
+  var HF=[['Filtro','Selección']].concat([['Visitador',$('f-mr').selectedOptions[0]?$('f-mr').selectedOptions[0].text:mr],['Año del plan',ANIO_PLAN]])
+    .concat(filt.length?filt:[['(sin filtros)','Todos los médicos con plan']])
+    .concat([[],['Médicos con plan exportados',cartera.length]]);
+  var wsF=XLSX.utils.aoa_to_sheet(HF);wsF['!cols']=[{wch:28},{wch:60}];
+  XLSX.utils.book_append_sheet(wb,wsF,'Filtros');
+  XLSX.writeFile(wb,'Plan_Accion_'+ANIO_PLAN+'_'+(esGlob(mr)?VISTAS_GLOB[mr].f:mr.replace(/\s+/g,'_'))+(filt.length?'_filtrado':'')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Excel generado: '+cartera.length+' médico'+(cartera.length===1?'':'s')+(filt.length?' (con filtros)':''));
 }
 
 /* ── INIT ──────────────────────────────────────────────────── */
