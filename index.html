@@ -859,6 +859,79 @@ var PATRONES={
   'Lealtad consolidada':{c:'pat-r',q:'Concentra su participación de forma sostenida en una marca de la competencia.',
     a:'Alto costo de conversión. No se sugiere patrocinio ni mesa salvo que Close Up ya muestre prescripción Nutribén; mantener visita y evidencia.'}
 };
+/* ── Patrocinio de la competencia (tabla patrocinios_comp en Supabase) ──
+   Un registro por médico, año y laboratorio. Lo marca el visitador dueño del médico;
+   gerente general y gerente de distrito pueden corregir cualquiera. Nunca se borra:
+   desmarcar deja activo=false con nombre y fecha. El Radar lee esta misma tabla. */
+var COMP={},COMP_OK=false;
+var COMP_LABS=['Abbott','Mead Johnson','Nestlé','Nutricia'],COMP_ANIOS=[2024,2025,2026,2027];
+var COMP_TIPO={sin_detalle:'Sí',internacional:'Internacional',local:'Local',otro:'Otro'};
+try{COMP=JSON.parse(localStorage.getItem('nb_comp')||'{}')||{};}catch(e){COMP={};}
+function compKey(d){return normTxt(d.n)+'|'+(d.pais||'');}
+function compIndex(rows){
+  var o={};(rows||[]).forEach(function(r){var k=r.medico_norm+'|'+r.pais;o[k]=o[k]||{};o[k][r.lab]=o[k][r.lab]||{};
+    o[k][r.lab][r.anio]={tipo:r.tipo,activo:r.activo,por:r.actualizado_por||(r.origen==='maestro_v2'?'Maestro (carga inicial)':''),f:r.actualizado};});
+  return o;
+}
+function cargarComp(){
+  if(!sb)return;
+  sb.from('patrocinios_comp').select('medico_norm,pais,anio,lab,tipo,activo,origen,actualizado_por,actualizado').limit(10000).then(function(r){
+    if(r.error){console.error('[comp]',r.error.message);return;}
+    COMP=compIndex(r.data);COMP_OK=true;
+    try{localStorage.setItem('nb_comp',JSON.stringify(COMP));}catch(e){}
+    pintaComp();
+  });
+}
+function compDe(d,lab,anio){var c=COMP[compKey(d)];c=c&&c[lab]&&c[lab][anio];return c&&c.activo?c:null;}
+function puedeComp(d){
+  if(!YO||!ONLINE)return false;
+  if(YO.role==='gerente_general'||YO.role==='gerente_distrito')return true;
+  if(YO.role!=='visitador'||!d.mr)return false;
+  var a=sqNorm(YO.full_name||''),b=sqNorm(d.mr);
+  return !!b&&(a.indexOf(b)!==-1||b.indexOf(a)!==-1);
+}
+function bloqueComp(d){
+  if(d.contacto||!d.pais)return '';
+  var ed=puedeComp(d),ult=null,c=COMP[compKey(d)]||{};
+  COMP_LABS.forEach(function(l){COMP_ANIOS.forEach(function(a){var x=c[l]&&c[l][a];if(x&&x.f&&(!ult||x.f>ult.f))ult=x;});});
+  var h='<div class="diag" id="comp-box"><h3>PATROCINIO DE LA COMPETENCIA</h3>'
+    +'<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12.5px;min-width:440px"><tr><th style="text-align:left;padding:4px 10px 4px 0;font-size:11px;color:#667">Laboratorio</th>'
+    +COMP_ANIOS.map(function(a){return '<th style="padding:4px 6px;font-size:11px;color:#667">'+a+'</th>';}).join('')+'</tr>';
+  COMP_LABS.forEach(function(l){
+    h+='<tr><td style="padding:4px 10px 4px 0;font-weight:600;white-space:nowrap">'+esc(l)+'</td>';
+    COMP_ANIOS.forEach(function(a){
+      var x=compDe(d,l,a),v=x?x.tipo:'';
+      h+='<td style="padding:3px 6px;text-align:center">'+(ed
+        ?'<select onchange="setComp(\''+jsq(l)+'\','+a+',this.value)" style="font-size:12px;padding:3px 4px;border-radius:6px;border:1px solid '+(v?'#c2410c;background:#fff4ec;font-weight:600':'#d5dbe6')+'">'
+          +'<option value=""'+(v?'':' selected')+'>No</option>'
+          +['sin_detalle','internacional','local','otro'].map(function(t){return '<option value="'+t+'"'+(v===t?' selected':'')+'>'+COMP_TIPO[t]+'</option>';}).join('')+'</select>'
+        :(v?'<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#fff4ec;color:#c2410c;font-weight:600;font-size:11.5px">'+COMP_TIPO[v]+'</span>':'<span style="color:#b4bccb">&mdash;</span>'))+'</td>';
+    });
+    h+='</tr>';
+  });
+  var libre=COMP_LABS.every(function(l){return !compDe(d,l,+ANIO_PLAN);});
+  h+='</table></div><div class="lect" style="margin-top:8px">'
+    +(libre?'<b>Ning&uacute;n laboratorio de la competencia registrado en '+esc(ANIO_PLAN)+'.</b> ':'')
+    +(ed?'Marca lo que sepas de este m&eacute;dico; se guarda al instante y lo usa el Radar.'
+        :(ONLINE?'Solo lo edita el visitador de este m&eacute;dico o un gerente.':'Sin conexi&oacute;n: solo lectura.'))
+    +(ult&&ult.por?' <span style="color:#8a94a6">&Uacute;ltimo cambio: '+esc(ult.por)+', '+new Date(ult.f).toLocaleDateString('es-HN')+'.</span>':'')
+    +'</div></div>';
+  return h;
+}
+function pintaComp(){var b=document.getElementById('comp-box');if(b&&cur&&!cur.contacto)b.outerHTML=bloqueComp(cur);}
+function setComp(lab,anio,val){
+  var d=cur;if(!d||!puedeComp(d)){toast('No tienes permiso para editar este médico');pintaComp();return;}
+  var k=compKey(d),prev=COMP[k]&&COMP[k][lab]&&COMP[k][lab][anio];
+  if(!val&&!prev){pintaComp();return;}
+  var row={medico:d.n,medico_norm:normTxt(d.n),pais:d.pais,anio:anio,lab:lab,activo:!!val,tipo:val||(prev?prev.tipo:'sin_detalle'),origen:'app'};
+  sb.from('patrocinios_comp').upsert(row,{onConflict:'medico_norm,pais,anio,lab'}).select('tipo,activo,actualizado_por,actualizado').then(function(r){
+    if(r.error||!r.data||!r.data[0]){toast('No se pudo guardar');console.error('[comp]',r.error);pintaComp();return;}
+    var x=r.data[0];COMP[k]=COMP[k]||{};COMP[k][lab]=COMP[k][lab]||{};
+    COMP[k][lab][anio]={tipo:x.tipo,activo:x.activo,por:x.actualizado_por||'',f:x.actualizado};
+    try{localStorage.setItem('nb_comp',JSON.stringify(COMP));}catch(e){}
+    toast(val?lab+' '+anio+' guardado':lab+' '+anio+' desmarcado');pintaComp();
+  });
+}
 function bloquePatron(d){
   var P=PATRONES[d.patron]||{c:'pat-o',q:'Patrón sin descripción registrada.',a:''};
   var mk=(d.marcas&&d.marcas!=='—')?d.marcas.split(',').map(function(x){return '<span>'+esc(x.trim())+'</span>';}).join(''):'';
@@ -1195,7 +1268,7 @@ function renderDetalle(){
 
    +avisoAnio(d)
    +(d.contacto?'<div class="diag"><div class="lect">'+lectura(d)+'</div></div>'
-     :bloquePatron(d)
+     :bloquePatron(d)+bloqueComp(d)
    +'<div class="diag"><h3>MEZCLA DE PRESCRIPCI&Oacute;N SEMANAL</h3>'
    +'<div class="mix">'+mixH+'</div>'
    +'<div class="lect">'+lectura(d)+'</div></div>')
@@ -3706,7 +3779,7 @@ function cargarTodo(){
     if(!u.error)SUMMITS=u.data.map(deSummit).sort(function(a,b){return b.id<a.id?-1:1;});
     if(ev&&!ev.error){EVENTOS=ev.data.map(deEvento);saveEventos();}
     if(cn&&!cn.error){CONGRESOS=cn.data.map(deCN);saveCongresos();}
-    ONLINE=true;estado('Conectado','ok');
+    ONLINE=true;estado('Conectado','ok');cargarComp();
     renderList();renderMesas();renderSummits();refrescaPresu();
     $('nv-ec').textContent=EVENTOS.filter(function(e){return !anioEv(e)||anioEv(e)===ANIO_PLAN;}).length;
     if($('v-pyo').style.display!=='none')renderPyo();
