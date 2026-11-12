@@ -865,6 +865,15 @@ var PATRONES={
    desmarcar deja activo=false con nombre y fecha. El Radar lee esta misma tabla. */
 var COMP={},COMP_OK=false;
 var COMP_LABS=['Abbott','Mead Johnson','Nestlé','Nutricia'],COMP_ANIOS=[2024,2025,2026,2027];
+/* En El Salvador Nutricia opera con dos divisiones (Nutrilon y Bebelac): se marcan por separado.
+   'Nutricia' a secas queda solo para los registros heredados del Maestro, que no decían la división. */
+var COMP_LABS_SV=['Abbott','Mead Johnson','Nestlé','Nutricia Nutrilon','Nutricia Bebelac'];
+var COMP_NOM={'Nutricia Nutrilon':'Nutrilon','Nutricia Bebelac':'Bebelac'};
+function compLabs(d){
+  if(d.pais!=='El Salvador')return COMP_LABS;
+  var c=COMP[compKey(d)]||{},leg=c['Nutricia']&&Object.keys(c['Nutricia']).some(function(a){return c['Nutricia'][a].activo;});
+  return leg?COMP_LABS_SV.concat(['Nutricia']):COMP_LABS_SV;
+}
 var COMP_TIPO={sin_detalle:'Sí',internacional:'Internacional',local:'Local',otro:'Otro'};
 try{COMP=JSON.parse(localStorage.getItem('nb_comp')||'{}')||{};}catch(e){COMP={};}
 function compKey(d){return normTxt(d.n)+'|'+(d.pais||'');}
@@ -892,13 +901,15 @@ function puedeComp(d){
 }
 function bloqueComp(d){
   if(d.contacto||!d.pais)return '';
-  var ed=puedeComp(d),ult=null,c=COMP[compKey(d)]||{};
-  COMP_LABS.forEach(function(l){COMP_ANIOS.forEach(function(a){var x=c[l]&&c[l][a];if(x&&x.f&&(!ult||x.f>ult.f))ult=x;});});
+  var ed=puedeComp(d),ult=null,c=COMP[compKey(d)]||{},LABS=compLabs(d),sv=d.pais==='El Salvador',leg=LABS.indexOf('Nutricia')!==-1&&sv;
+  LABS.forEach(function(l){COMP_ANIOS.forEach(function(a){var x=c[l]&&c[l][a];if(x&&x.f&&(!ult||x.f>ult.f))ult=x;});});
   var h='<div class="diag" id="comp-box"><h3>PATROCINIO DE LA COMPETENCIA</h3>'
     +'<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12.5px;min-width:440px"><tr><th style="text-align:left;padding:4px 10px 4px 0;font-size:11px;color:#667">Laboratorio</th>'
     +COMP_ANIOS.map(function(a){return '<th style="padding:4px 6px;font-size:11px;color:#667">'+a+'</th>';}).join('')+'</tr>';
-  COMP_LABS.forEach(function(l){
-    h+='<tr><td style="padding:4px 10px 4px 0;font-weight:600;white-space:nowrap">'+esc(l)+'</td>';
+  LABS.forEach(function(l){
+    if(sv&&l==='Nutricia Nutrilon')h+='<tr><td colspan="'+(COMP_ANIOS.length+1)+'" style="padding:6px 0 0;font-weight:600">Nutricia</td></tr>';
+    var sub=sv&&l.indexOf('Nutricia')===0;
+    h+='<tr><td style="padding:4px 10px 4px '+(sub?'14px':'0')+';font-weight:'+(sub?'500':'600')+';white-space:nowrap">'+(sub?'&#8627; ':'')+esc(sub?(COMP_NOM[l]||'Sin divisi\u00f3n'):l)+'</td>';
     COMP_ANIOS.forEach(function(a){
       var x=compDe(d,l,a),v=x?x.tipo:'';
       h+='<td style="padding:3px 6px;text-align:center">'+(ed
@@ -909,9 +920,10 @@ function bloqueComp(d){
     });
     h+='</tr>';
   });
-  var libre=COMP_LABS.every(function(l){return !compDe(d,l,+ANIO_PLAN);});
+  var libre=LABS.every(function(l){return !compDe(d,l,+ANIO_PLAN);});
   h+='</table></div><div class="lect" style="margin-top:8px">'
     +(libre?'<b>Ning&uacute;n laboratorio de la competencia registrado en '+esc(ANIO_PLAN)+'.</b> ':'')
+    +(leg?'<b style="color:#c2410c">Tiene un patrocinio de Nutricia sin divisi&oacute;n (ven&iacute;a del Excel):</b> m&aacute;rcalo en Nutrilon o Bebelac y pon &ldquo;No&rdquo; en &ldquo;Sin divisi&oacute;n&rdquo;. ':'')
     +(ed?'Marca lo que sepas de este m&eacute;dico; se guarda al instante y lo usa el Radar.'
         :(ONLINE?'Solo lo edita el visitador de este m&eacute;dico o un gerente.':'Sin conexi&oacute;n: solo lectura.'))
     +(ult&&ult.por?' <span style="color:#8a94a6">&Uacute;ltimo cambio: '+esc(ult.por)+', '+new Date(ult.f).toLocaleDateString('es-HN')+'.</span>':'')
