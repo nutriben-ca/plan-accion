@@ -391,6 +391,18 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 #ct-mo label{display:block;font-size:11px;font-weight:700;color:#5a6478;margin:9px 0 3px;text-transform:uppercase}
 #ct-mo input,#ct-mo select{width:100%;box-sizing:border-box;padding:9px 10px;border:1.5px solid #d6dcea;border-radius:7px;font-size:14px}
 #ct-mo .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+#sq-mo{position:fixed;inset:0;z-index:9000;background:rgba(10,20,50,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#sq-mo .box{background:#fff;border-radius:12px;width:100%;max-width:560px;padding:18px 18px 14px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:92vh;overflow:auto}
+#sq-mo h3{margin:0 0 4px;font-size:16px;color:#0033A1}
+#sq-mo label{display:block;font-size:11px;font-weight:700;color:#5a6478;margin:9px 0 3px;text-transform:uppercase}
+#sq-mo input,#sq-mo select,#sq-mo textarea{width:100%;box-sizing:border-box;padding:9px 10px;border:1.5px solid #d6dcea;border-radius:7px;font-size:14px;font-family:inherit}
+#sq-mo textarea{min-height:70px;resize:vertical}
+#sq-mo .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+#sq-mo .note{border-radius:8px;padding:9px 11px;margin-top:10px;font-size:12.5px;line-height:1.45}
+#sq-mo .note.i{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E3A8A}#sq-mo .note.w{background:#FEF9C3;border:1px solid #FDE68A;color:#854D0E}#sq-mo .note.e{background:#FEE2E2;border:1px solid #FECACA;color:#991B1B}
+#sq-mo .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+#sq-mo .cur{display:flex;gap:6px;align-items:center}#sq-mo .cur b{color:#0033A1;white-space:nowrap}
+@media(max-width:520px){#sq-mo .g2{grid-template-columns:1fr}}
 .solchip{display:inline-block;font-size:11px;font-weight:700;padding:4px 8px;border-radius:10px;background:#e3e9f7;color:#2a3a66;white-space:nowrap}
 .solchip.ok{background:#dcf5e3;color:#166534}.solchip.no{background:#fde2e2;color:#991b1b}.solchip.wait{background:#fff3cd;color:#8a6000}
 </style>
@@ -619,6 +631,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
 <div class="toast" id="toast"></div>
 <div id="cal-mo" onclick="if(event.target===this)cerrarCelda()"><div class="box"><h3 id="cal-t">Detalle</h3><div style="font-size:12px;color:#5a6478">Actividades que forman este monto.</div><div id="cal-list"></div><div style="text-align:right;margin-top:12px"><button class="btn btn-s" onclick="cerrarCelda()">Cerrar</button></div></div></div>
 <div id="rd-mo" onclick="if(event.target===this)cerrarPend()"><div class="box"><h3>Pendientes de alta desde el Radar</h3><div style="font-size:12px;color:#5a6478">Médicos que marcaste en el Radar y no tienen ficha aquí. Dalos de alta con el formulario de profesional; ahí completas la institución.</div><div id="rd-list"></div><div style="text-align:right;margin-top:12px"><button class="btn btn-s" onclick="cerrarPend()">Cerrar</button></div></div></div>
+<div id="sq-mo" onclick="if(event.target===this)cerrarSQ()"><div class="box" id="sq-box"></div></div>
 <div id="ct-mo" onclick="if(event.target===this)cerrarContacto()"><div class="box">
   <h3 id="ct-t">Agregar profesional de salud</h3>
   <div style="font-size:12px;color:#5a6478">Enfermeras, dependientes de farmacia, personal administrativo u otros que no est&aacute;n en la cartera de m&eacute;dicos.</div>
@@ -1281,11 +1294,12 @@ function solPuntualRef(x){return 'puntual:'+key(cur)+'#'+x.id;}
 function solPuntualCell(x,i){
   var q=x.id?REQS[solPuntualRef(x)]:null;
   var activa=q&&['borrador','enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1;
-  if(activa||(q&&q.status==='cerrada')){
+  if((activa&&q.status!=='borrador')||(q&&q.status==='cerrada')){
     var st=SOL_ST[q.status]||[q.status,''];
     return '<a href="'+GASTOS_URL+'#ver='+q.id+'" target="_blank" rel="noopener" title="Ver SOL-'+String(q.folio).padStart(4,'0')+' en Gastos" style="text-decoration:none"><span class="solchip '+st[1]+'">SOL-'+String(q.folio).padStart(4,'0')+' &middot; '+st[0].split(' ·')[0]+'</span></a>';
   }
-  return '<button class="btn btn-p" style="padding:6px 8px;font-size:11px" onclick="pedirSolPuntual('+i+')">&#128221; '+(q?'Volver a solicitar':'Solicitar aprobaci&oacute;n')+'</button>';
+  var lb=q&&q.status==='rechazado'?'&#9998; Corregir y reenviar':q&&q.status==='borrador'?'&#128221; Completar y enviar':q?'&#128221; Volver a solicitar':'&#128221; Solicitar aprobaci&oacute;n';
+  return '<button class="btn btn-p" style="padding:6px 8px;font-size:11px" onclick="pedirSolPuntual('+i+')"'+(q&&q.status==='rechazado'&&(q.general_comments||q.district_comments)?' title="Motivo: '+esc(q.general_comments||q.district_comments)+'"':'')+'>'+lb+'</button>';
 }
 function pedirSolPuntual(i){
   var x=DRAFT.solicitudes[i];if(!x)return;
@@ -3392,7 +3406,7 @@ function entrar(ev){
 }
 function verificar(ses){
   var uid=ses&&ses.user&&ses.user.id;
-  sb.from('expense_profiles').select('id,full_name,role').eq('auth_user_id',uid).eq('is_active',true).eq('account_status','activo').maybeSingle().then(function(r){
+  sb.from('expense_profiles').select('id,full_name,role,country').eq('auth_user_id',uid).eq('is_active',true).eq('account_status','activo').maybeSingle().then(function(r){
     if(r.error&&!r.data&&/fetch|network/i.test(r.error.message||'')){
       // sin red: con sesión guardada se trabaja local y se sincroniza al volver la conexión
       YO=YO||{full_name:'',role:''};arrancar();return;
@@ -3426,7 +3440,7 @@ var SOL_SYM={HNL:'L ',USD:'$',EUR:'€',NIO:'C$ ',CRC:'₡'};
 function solMoney(n,c){return (SOL_SYM[c]||'')+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function cargarSolicitudes(){
   if(!sb||!ARRANCADO)return;
-  sb.from('expense_requests').select('id,folio,status,amount,approved_amount,currency,source_ref,created_at').not('source_ref','is',null).order('created_at',{ascending:true}).then(function(r){
+  sb.from('expense_requests').select('id,folio,status,amount,approved_amount,currency,source_ref,created_at,user_id,district_comments,general_comments').not('source_ref','is',null).order('created_at',{ascending:true}).then(function(r){
     if(r.error)return;
     var M2={};r.data.forEach(function(q){M2[q.source_ref]=q;});
     var ids=r.data.filter(function(q){return q.status==='aprobado'||q.status==='cerrada';}).map(function(q){return q.id;});
@@ -3445,18 +3459,113 @@ function solBar(ref,pre){
     h+='<span>&#128221; <b>SOL-'+String(q.folio).padStart(4,'0')+'</b></span><span class="st '+st[1]+'">'+st[0]+'</span>';
     if(q.status==='aprobado'||q.status==='cerrada')h+='<span>'+solMoney(q.approved_amount!=null?q.approved_amount:q.amount,q.currency)+' aprobado &middot; usado '+solMoney(q.used||0,q.currency)+'</span>';
     else h+='<span>'+solMoney(q.amount,q.currency)+'</span>';
-  }else h+='<span>Este gasto necesita aprobaci&oacute;n previa en la app de gastos.</span>';
+  }else h+='<span>Este gasto necesita aprobaci&oacute;n previa antes de gastar.</span>';
   h+='<span class="sp"></span>';
-  if(activa)h+='<a class="btn btn-s" href="'+GASTOS_URL+'#ver='+q.id+'" target="_blank" rel="noopener">Ver en Gastos</a>';
-  else h+='<button class="btn btn-p" onclick="pedirSol(\''+rj+'\')">&#128221; '+(q?'Nueva solicitud':'Solicitar aprobaci&oacute;n')+'</button>';
+  if(q&&q.status==='rechazado'&&(q.general_comments||q.district_comments))h+='<span style="flex-basis:100%;color:#991b1b">Motivo: '+esc(q.general_comments||q.district_comments)+'</span>';
+  if(activa&&q.status!=='borrador')h+='<a class="btn btn-s" href="'+GASTOS_URL+'#ver='+q.id+'" target="_blank" rel="noopener">Ver en Gastos</a>';
+  if(q&&q.status==='borrador')h+='<button class="btn btn-p" onclick="pedirSol(\''+rj+'\')">&#128221; Completar y enviar</button>';
+  else if(q&&q.status==='rechazado')h+='<button class="btn btn-p" onclick="pedirSol(\''+rj+'\')">&#9998; Corregir y reenviar</button>';
+  else if(!activa)h+='<button class="btn btn-p" onclick="pedirSol(\''+rj+'\')">&#128221; '+(q?'Nueva solicitud':'Solicitar aprobaci&oacute;n')+'</button>';
   return h+'</div>';
 }
+/* La solicitud se envía desde aquí; la app de gastos queda para aprobar, pagar y liquidar */
+var SQ=null;
+var SQ_CUR={Honduras:'HNL','El Salvador':'USD',Nicaragua:'NIO','Costa Rica':'CRC',Europa:'EUR',Internacional:'USD'};
+var SQ_PAY={tarjeta:'Tarjeta corporativa',anticipo:'Anticipo',proveedor:'Pago directo a proveedor'};
+var SQ_MIN_H=48;
+function reqDe(ref){return REQS[ref]||(ref.indexOf('@')!==-1?REQS[ref.slice(0,ref.lastIndexOf('@'))]:null);}
+function sqNorm(x){return (x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+function sqHoras(fecha){if(!fecha)return null;return (new Date(fecha+'T00:00:00-06:00')-new Date())/36e5;}
 function pedirSol(ref){
   var pre=SOLPRE[ref];if(!pre)return;
-  if(!pre.date&&!confirm('Esta actividad no tiene fecha. ¿Pedir la aprobación de todas formas? (la puedes poner en la solicitud)'))return;
-  var js=JSON.stringify(Object.assign({ref:ref},pre));
-  var b64=btoa(unescape(encodeURIComponent(js))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  window.open(GASTOS_URL+'#sol='+b64,'_blank','noopener');
+  if(!sb||!YO||!YO.id){toast('Inicia sesión con tu cuenta de gastos para solicitar');return;}
+  var q=reqDe(ref);
+  if(q&&['enviado','aprobado_distrito','aprobado'].indexOf(q.status)!==-1){toast('Esta actividad ya tiene la SOL-'+String(q.folio).padStart(4,'0')+' en curso');return;}
+  if(q&&(q.status==='borrador'||q.status==='rechazado')){
+    if(q.user_id&&q.user_id!==YO.id){toast('Esta solicitud la pidió otra persona; la corrige quien la pidió');return;}
+    sb.from('expense_requests').select('*').eq('id',q.id).maybeSingle().then(function(r){
+      if(r.error||!r.data){toast('No se pudo abrir la solicitud. Intenta de nuevo.');return;}
+      abrirSQ(ref,pre,r.data);
+    },function(){toast('Sin conexión. Intenta de nuevo.');});
+    return;
+  }
+  abrirSQ(ref,pre,null);
+}
+function abrirSQ(ref,pre,q){
+  var pais=(q&&q.country)||pre.pais||(YO&&YO.country)||'Honduras';if(!SQ_CUR[pais])pais='Honduras';
+  var cur=SQ_CUR[pais],usd=num(pre.usd);
+  SQ={ref:ref,pre:pre,q:q,pais:pais,file:null};
+  var aud=(q&&q.audience)||pre.aud||'medicos';
+  var otro=pre.mr&&YO.full_name&&sqNorm(YO.full_name).indexOf(sqNorm(pre.mr))===-1&&sqNorm(pre.mr).indexOf(sqNorm(YO.full_name))===-1;
+  var monto=q?q.amount:(cur==='USD'&&usd>0?usd:'');
+  var h='<h3>'+(q&&q.status==='rechazado'?'Corregir y reenviar SOL-'+String(q.folio).padStart(4,'0'):q?'Completar SOL-'+String(q.folio).padStart(4,'0'):'Solicitar aprobaci&oacute;n')+'</h3>'
+    +'<div style="font-size:12px;color:#5a6478">Va a tu jefe inmediato y luego a Gerencia General. Cuando la aprueben, liquidas las facturas en la app de gastos.</div>';
+  if(q&&q.status==='rechazado'&&(q.general_comments||q.district_comments))h+='<div class="note e"><b>Motivo del rechazo:</b> '+esc(q.general_comments||q.district_comments)+'</div>';
+  if(usd>0)h+='<div class="note i">Inversi&oacute;n planificada: <b>US$ '+usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</b>'+(cur!=='USD'?'. Escribe el monto real en '+cur+'.':'.')+'</div>';
+  if(otro)h+='<div class="note w">Esta actividad es de <b>'+esc(pre.mr)+'</b>. La solicitud queda a <b>tu</b> nombre y en la moneda de '+esc(pais)+'. Lo normal es que la pida el visitador responsable desde su cuenta.</div>';
+  h+='<label>&iquest;Qu&eacute; necesitas?</label><input id="sq-title" maxlength="120" value="'+esc((q&&q.title)||pre.title||'')+'">'
+    +'<label>Justificaci&oacute;n: objetivo y resultado esperado</label><textarea id="sq-just">'+esc((q&&q.justification)||pre.just||'')+'</textarea>'
+    +'<label>'+(aud==='medicos'?'M&eacute;dicos beneficiados':'Participantes')+'</label><input id="sq-ben" value="'+esc((q&&q.beneficiaries)||pre.ben||'')+'">'
+    +'<label>Instituci&oacute;n'+(aud==='medicos'?' (opcional)':'')+'</label><input id="sq-inst" value="'+esc((q&&q.institution)||pre.inst||'')+'" placeholder="Hospital, maternidad o farmacia">'
+    +'<div class="g2"><div><label>Fecha de la actividad</label><input type="date" id="sq-d1" value="'+esc((q&&q.event_date)||(/^\d{4}-\d{2}-\d{2}$/.test(pre.date||'')?pre.date:''))+'" oninput="sqHint()"><div id="sq-d1h" style="font-size:11px;color:#b91c1c;margin-top:3px"></div></div>'
+    +'<div><label>Hasta (si dura varios d&iacute;as)</label><input type="date" id="sq-d2" value="'+esc((q&&q.event_end)||'')+'"></div>'
+    +'<div><label>Pa&iacute;s / moneda</label><select id="sq-ct" onchange="sqCur()">'+Object.keys(SQ_CUR).map(function(c){return '<option '+(c===pais?'selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'
+    +'<div><label>Monto que solicitas</label><div class="cur"><b id="sq-sym">'+cur+'</b><input id="sq-amt" inputmode="decimal" value="'+esc(monto==null?'':String(monto))+'" placeholder="0.00"></div></div>'
+    +'<div><label>&iquest;C&oacute;mo se pagar&aacute;?</label><select id="sq-pay">'+Object.keys(SQ_PAY).map(function(k){return '<option value="'+k+'" '+(((q&&q.payment_mode)||'tarjeta')===k?'selected':'')+'>'+SQ_PAY[k]+'</option>';}).join('')+'</select></div>'
+    +'<div><label>Proveedor (si ya lo sabes)</label><input id="sq-vendor" value="'+esc((q&&q.vendor)||'')+'" placeholder="Restaurante, hotel, imprenta&hellip;"></div></div>'
+    +'<label>Cotizaci&oacute;n o programa (opcional)</label><input type="file" id="sq-file" accept="image/*,application/pdf" onchange="SQ.file=this.files[0]||null">'
+    +(q&&q.quote_url?'<div style="font-size:11px;color:#5a6478;margin-top:3px">Ya tiene una cotizaci&oacute;n adjunta; sube otra solo si quieres reemplazarla.</div>':'')
+    +'<div class="acts"><button class="btn btn-s" onclick="cerrarSQ()">Cancelar</button><button class="btn btn-p" id="sq-send" onclick="enviarSQ()">Enviar para aprobaci&oacute;n</button></div>';
+  $('sq-box').innerHTML=h;$('sq-mo').style.display='flex';sqHint();
+}
+function cerrarSQ(){$('sq-mo').style.display='none';SQ=null;}
+function sqCur(){$('sq-sym').textContent=SQ_CUR[$('sq-ct').value]||'';}
+function sqHint(){var e=$('sq-d1h');if(!e)return;var h=sqHoras($('sq-d1').value);e.textContent=h!==null&&h<SQ_MIN_H?'Menos de '+SQ_MIN_H+' h de anticipación: irá con alerta':'';}
+function sqMonto(v){v=String(v||'').replace(/[^\d.,-]/g,'');if(v.indexOf(',')!==-1&&v.indexOf('.')!==-1)v=v.replace(/,/g,'');else v=v.replace(',','.');return parseFloat(v)||0;}
+function sqComprimir(file){
+  return new Promise(function(res,rej){
+    var img=new Image(),u=URL.createObjectURL(file);
+    img.onload=function(){URL.revokeObjectURL(u);var w=img.width,h=img.height,m=1600;
+      if(w>h&&w>m){h=Math.round(h*m/w);w=m;}else if(h>=w&&h>m){w=Math.round(w*m/h);h=m;}
+      var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(function(b){b?res(b):rej(new Error('imagen no válida'));},'image/jpeg',0.82);};
+    img.onerror=function(){URL.revokeObjectURL(u);rej(new Error('imagen no válida'));};img.src=u;});
+}
+function enviarSQ(){
+  if(!SQ)return;
+  var pre=SQ.pre,aud=(SQ.q&&SQ.q.audience)||pre.aud||'medicos',tipo=(SQ.q&&SQ.q.tipo)||pre.tipo||'medicos';
+  var b={tipo:tipo,subtipo:(SQ.q&&SQ.q.subtipo)||pre.sub||null,audience:tipo==='medicos'?aud:null,
+    title:$('sq-title').value.trim(),justification:$('sq-just').value.trim(),beneficiaries:$('sq-ben').value.trim()||null,
+    institution:$('sq-inst').value.trim()||null,event_date:$('sq-d1').value||null,event_end:$('sq-d2').value||null,
+    country:$('sq-ct').value,amount:sqMonto($('sq-amt').value),payment_mode:$('sq-pay').value,vendor:$('sq-vendor').value.trim()||null};
+  if(!b.title){toast('Escribe qué necesitas');return;}
+  if(b.justification.length<15){toast('Explica el objetivo y el resultado esperado');return;}
+  if(tipo==='medicos'&&!b.beneficiaries){toast('Indica quiénes participan');return;}
+  if(tipo==='medicos'&&aud!=='medicos'&&!b.institution){toast('Indica la institución');return;}
+  if(!b.event_date){toast('Indica la fecha de la actividad');return;}
+  if(b.event_end&&b.event_end<b.event_date){toast('La fecha final es anterior a la inicial');return;}
+  if(!(b.amount>0)){toast('Indica el monto que solicitas');return;}
+  var hh=sqHoras(b.event_date);
+  if(hh<SQ_MIN_H&&!confirm((hh<0?'La actividad ya pasó':'Faltan '+Math.max(0,Math.floor(hh))+' horas para la actividad')+'.\n\nLa política pide solicitar al menos '+SQ_MIN_H+' horas antes. Se enviará con una alerta que verán tu jefe y Gerencia.\n\n¿Enviar de todas formas?'))return;
+  var btn=$('sq-send');btn.disabled=true;btn.textContent='Enviando…';
+  var s=SQ,id=s.q&&s.q.id;
+  var fallo=function(e){btn.disabled=false;btn.textContent='Enviar para aprobación';toast('No se pudo enviar: '+((e&&e.message)||'sin conexión'));cargarSolicitudes();};
+  var crear=id?Promise.resolve(id):sb.from('expense_requests').insert(Object.assign({},b,{user_id:YO.id,status:'borrador',source_ref:s.ref,plan_amount_usd:num(pre.usd)||null})).select('*').single().then(function(r){
+    if(r.error)throw r.error;s.q=r.data;return r.data.id;});
+  crear.then(function(rid){
+    id=rid;if(!s.file)return null;
+    var f=s.file,pdf=/pdf/i.test(f.type);
+    if(pdf&&f.size>8*1024*1024)throw new Error('el PDF pesa más de 8 MB');
+    return (pdf?Promise.resolve(f):sqComprimir(f)).then(function(blob){
+      var path=rid+'/'+(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now())+'.'+(pdf?'pdf':'jpg');
+      return sb.storage.from('solicitudes').upload(path,blob,{contentType:pdf?'application/pdf':'image/jpeg',upsert:false}).then(function(u){if(u.error)throw new Error('no se pudo subir la cotización: '+u.error.message);return path;});
+    });
+  }).then(function(path){
+    return sb.from('expense_requests').update(Object.assign({},b,{status:'enviado'},path?{quote_url:path}:{})).eq('id',id).then(function(r){if(r.error)throw r.error;});
+  }).then(function(){
+    sb.functions.invoke('notify',{body:{action:'request',request_id:id}}).catch(function(){});
+    cerrarSQ();toast('✓ Solicitud enviada para aprobación');cargarSolicitudes();
+  }).catch(fallo);
 }
 function audDe(d){return d&&d.contacto?({enfermeria:'enfermeria',farmacia:'farmacia',administrativo:'administrativo',otro:'mixto'}[d.contacto.tipo]||'mixto'):'medicos';}
 function instDe(d){return d&&d.contacto?d.contacto.institucion:'';}
