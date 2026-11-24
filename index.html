@@ -1859,6 +1859,7 @@ function renderEvento(){
       +otros.map(function(o){return '<option value="'+esc(o.id)+'">'+esc(lblEvento(o))+'</option>';}).join('')+'</select>'
      :'<button class="btn btn-s" onclick="borrarEvento()">Eliminar evento</button>')
    +'</div>'
+   +(e.tipo==='summit_local'?bannerMoverSummit(e,n,total):'')
    +'<div class="sum">'
    +'<div class="su"><div class="v">'+n+'</div><div class="l">m&eacute;dicos con este evento</div></div>'
    +'<div class="su"><div class="v">'+fmtUSD(total)+'</div><div class="l">inversi&oacute;n total</div></div>'
@@ -1868,7 +1869,8 @@ function renderEvento(){
    +'<div class="sec"><div class="sec-h"><h3>Datos del evento</h3></div><div class="sec-b">'
    +'<div class="f3">'
    +'<div class="fg"><label>Tipo</label><select onchange="setE(\'tipo\',this.value)">'
-     +TIPOS_EV.map(function(t){return '<option value="'+t[0]+'"'+(e.tipo===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select></div>'
+     +TIPOS_EV.filter(function(t){return t[0]!=='summit_local'||e.tipo==='summit_local';})
+       .map(function(t){return '<option value="'+t[0]+'"'+(e.tipo===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select></div>'
    +'<div class="fg"><label>Sede / ciudad</label><input type="text" value="'+esc(e.sede)+'" onchange="setE(\'sede\',this.value)"></div>'
    +'<div class="fg"><label>Costo de referencia por m&eacute;dico (US$)</label><input type="number" value="'+esc(e.costo_medico)+'" onchange="setE(\'costo_medico\',this.value)"></div>'
    +'</div><div class="f3">'
@@ -1945,6 +1947,58 @@ function fusionarEvento(destId){
   EVENTOS=EVENTOS.filter(function(x){return x.id!==e.id;});delEvento(e.id);saveEventos();
   curE=d.id;renderEventos();renderEvento();toast('Eventos fusionados');
 }
+/* ── Summits locales: viven solo en su pestaña ──────────────
+   Un summit cargado como patrocinio se contaba dos veces si también
+   existía en Summits locales (montos por médico + rubros del summit).
+   Esto lo pasa a la pestaña Summits y apaga los patrocinios. */
+function bannerMoverSummit(e,n,total){
+  var anio=anioEv(e);
+  var L=SUMMITS.filter(function(s){var a=anioDe(s.fecha_ini);return !a||!anio||a===anio;})
+    .sort(function(a,b){return (a.nombre||'')<(b.nombre||'')?-1:1;});
+  return '<div class="nota-v" style="margin:10px 0;border-left:3px solid #c2410c">'
+    +'<b>Los summits locales se manejan en la pesta&ntilde;a Summits locales.</b> '
+    +'Si este summit tambi&eacute;n existe all&aacute;, el presupuesto lo cuenta dos veces.<br>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'
+    +'<select id="mv-summit"><option value="__nuevo">Crear summit nuevo con estos '+n+' m&eacute;dicos</option>'
+    +L.map(function(s){return '<option value="'+esc(s.id)+'">Unir a: '+esc(s.nombre||'Summit sin nombre')
+      +(s.fecha_ini?' · '+fDia(s.fecha_ini):'')+' ('+(s.invitados||[]).length+' invitados)</option>';}).join('')
+    +'</select><button class="btn btn-p" onclick="moverASummit()">Mover a Summits locales</button></div>'
+    +'<div style="font-size:11px;color:#6b7590;margin-top:6px">Summit nuevo: el total de patrocinios ('+fmtUSD(total)
+    +') pasa al rubro &laquo;Otros&raquo; para que lo repartas en rubros. Unir a uno existente: solo se suman los invitados; '
+    +'el costo que vale es el de los rubros de ese summit.</div></div>';
+}
+function moverASummit(){
+  var e=E_();if(!e)return;
+  var dest=$('mv-summit')?$('mv-summit').value:'__nuevo';
+  var ks=asistentes(e),total=totalEvento(e);
+  var s,nuevo=dest==='__nuevo';
+  if(nuevo){
+    var cuenta={};ks.forEach(function(k){var m=k.split('||')[0];cuenta[m]=(cuenta[m]||0)+1;});
+    var mr=Object.keys(cuenta).sort(function(a,b){return cuenta[b]-cuenta[a];})[0]||'';
+    s={id:'s'+Date.now(),nombre:e.nombre||'',destino:e.sede||'',fecha_ini:e.fecha||'',fecha_fin:e.fecha_fin||'',
+      programa:'',mr:mr,cupo:Math.max(18,ks.length),costos:total?{otros:String(total)}:{},
+      notas:'Migrado desde Patrocinios: '+ks.length+' médicos, '+fmtUSD(total)+' en patrocinios individuales (cargado en Otros; repartir en rubros).'
+        +(e.notas?'\n'+e.notas:''),
+      invitados:[],crit:{prod:'e1',min:3,nb:'',tier:'',seg:'',mr:''}};
+  }else{
+    s=SUMMITS.filter(function(x){return x.id===dest;})[0];
+    if(!s){toast('No encontré ese summit');return;}
+  }
+  var msg=nuevo
+    ?'Crear el summit "'+(e.nombre||'sin nombre')+'" en Summits locales con '+ks.length+' médicos y '+fmtUSD(total)+' en el rubro Otros, quitar el patrocinio de esos médicos y eliminar este evento de Patrocinios?'
+    :'Unir los '+ks.length+' médicos a "'+(s.nombre||'Summit sin nombre')+'", quitar su patrocinio ('+fmtUSD(total)+') y eliminar este evento de Patrocinios? El costo queda solo en los rubros de ese summit.';
+  if(!confirm(msg))return;
+  ks.forEach(function(k){if(s.invitados.indexOf(k)===-1)s.invitados.push(k);});
+  if(!nuevo){s.notas=(s.notas?s.notas+'\n':'')+'Se unieron '+ks.length+' médicos desde Patrocinios ("'+(e.nombre||'')+'", '+fmtUSD(total)+' en patrocinios eliminados).';}
+  if(nuevo)SUMMITS.unshift(s);
+  saveSummits(s);
+  ks.forEach(function(k){guardaPlanDe(k,function(pl){pl.patrocinio=pl.patrocinio||{};pl.patrocinio.activo=false;pl.patrocinio.monto='';});});
+  EVENTOS=EVENTOS.filter(function(x){return x.id!==e.id;});delEvento(e.id);saveEventos();
+  curE=null;renderEventos();renderEvento();renderList();renderSummits();
+  toast('Summit movido a Summits locales');
+  vista('summits');if($('s-mr'))$('s-mr').value='';abrirSummit(s.id);
+}
+
 function borrarEvento(){
   var e=E_();if(!e)return;
   if(asistentes(e).length){toast('Tiene médicos: fúsionalo o quítalos primero');return;}
