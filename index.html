@@ -478,9 +478,14 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
       <option value="">Todos</option><option value="con">Con plan</option><option value="sin">Sin plan</option>
     </select>
   </label>
-  <label>Actividad
+  <label><span id="lbl-inv">Inversi&oacute;n</span>
     <select id="f-est" onchange="renderList()">
-      <option value="">Todos</option><option value="pat">Con patrocinio</option><option value="anio">Con actividad en el a&ntilde;o</option>
+      <option value="">Todos</option><option value="pat">Patrocinio</option><option value="oo">One to one</option>
+      <option value="mesa">Mesa redonda</option><option value="summit">Summit local</option><option value="nac">Evento nacional</option>
+      <option value="mm">Muestras m&eacute;dicas</option><option value="mat">Material promocional</option><option value="sol">Solicitud puntual</option>
+    </select>
+    <select id="f-invmodo" onchange="renderList()" title="C&oacute;mo combinar las inversiones marcadas">
+      <option value="o">cualquiera</option><option value="y">todas</option>
     </select>
   </label>
   <label>Datos
@@ -1058,10 +1063,11 @@ function msInit(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',msInit);else setTimeout(msInit,0);
 
 function filtrosActivos(){
-  var nom={'f-seg':'Segmento','f-tier':'Tier','f-pat':'Patrón','f-est':'Actividad','f-dat':'Datos','f-tipo':'Tipo'},out=[];
+  var nom={'f-seg':'Segmento','f-tier':'Tier','f-pat':'Patrón','f-est':'Inversión','f-dat':'Datos','f-tipo':'Tipo'},out=[];
   MS_IDS.forEach(function(id){var e=$(id),v=msv(id);if(!e||!v.length)return;
     out.push([nom[id],v.map(function(x){var o=[].filter.call(e.options,function(z){return z.value===x;})[0];return o?o.text:x;}).join(', ')]);});
   var pl=$('f-plan');if(pl&&pl.value)out.push(['Plan',pl.options[pl.selectedIndex].text]);
+  if(msv('f-est').length>1&&$('f-invmodo')&&$('f-invmodo').value==='y')out.push(['Combinar inversión','todas a la vez']);
   var q=($('f-q')&&$('f-q').value||'').trim();if(q)out.push(['Búsqueda',q]);
   return out;
 }
@@ -1069,7 +1075,8 @@ function filtrados(){
   var mr=$('f-mr').value,seg=msv('f-seg'),tier=msv('f-tier'),
       est=msv('f-est'),q=($('f-q').value||'').toLowerCase(),
       dat=msv('f-dat'),tipo=msv('f-tipo'),pat=msv('f-pat'),
-      plan=$('f-plan')?$('f-plan').value:'';
+      plan=$('f-plan')?$('f-plan').value:'',
+      modoInv=$('f-invmodo')?$('f-invmodo').value:'o';
   /* Dentro de cada selector las opciones se suman (A o B1 o B2); entre selectores se cruzan. */
   if(!mr)return [];
   return DATA.filter(function(d){
@@ -1083,13 +1090,9 @@ function filtrados(){
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
     if(plan==='con'&&!PLANES[key(d)])return false;
     if(plan==='sin'&&PLANES[key(d)])return false;
-    if(est.length){var tiene=!!PLANES[key(d)],pp=PLANES[key(d)];
-      if(!est.some(function(x){
-        if(x==='con')return tiene;
-        if(x==='sin')return !tiene;
-        if(x==='pat')return !!(pp&&pp.patrocinio&&pp.patrocinio.activo&&anioTac('patrocinio',pp.patrocinio)!==null&&enAnio(anioTac('patrocinio',pp.patrocinio)));
-        if(x==='anio')return !!actsAnio(key(d),anioVista());
-        return true;}))return false;}
+    if(est.length){var T=invTipos(key(d),anioVista()),
+        cumple=function(x){return !!T[x];};
+      if(modoInv==='y'?!est.every(cumple):!est.some(cumple))return false;}
     return true;
   }).sort(function(a,b){
     if(!!a.contacto!==!!b.contacto)return a.contacto?1:-1;
@@ -1778,6 +1781,7 @@ function irPlan(k){
   vista('planes');$('f-mr').value=d.mr;
   ['f-seg','f-tier','f-pat','f-est','f-dat'].forEach(function(id){msSet(id,[]);});
   if($('f-plan'))$('f-plan').value='';
+  if($('f-invmodo'))$('f-invmodo').value='o';
   if($('f-q'))$('f-q').value='';
   pickMR();abrir(k);
 }
@@ -3140,8 +3144,7 @@ function pintaAnioPlanes(){
   var anios=aniosDisponibles();
   if(anios.indexOf(ANIO_PLAN)===-1){anios.push(ANIO_PLAN);anios.sort();}
   sel.innerHTML=anios.map(function(x){return '<option'+(x===ANIO_PLAN?' selected':'')+'>'+x+'</option>';}).join('');
-  var o=$('f-est')&&$('f-est').querySelector('option[value="anio"]');
-  if(o)o.textContent='Con actividad en '+ANIO_PLAN;
+  if($('lbl-inv'))$('lbl-inv').textContent='Inversión '+ANIO_PLAN;
   if(typeof msPinta==='function')msPinta('f-est');
   var oc=$('f-plan')&&$('f-plan').querySelector('option[value="con"]');
   if(oc)oc.textContent='Con plan '+ANIO_PLAN;
@@ -3186,6 +3189,27 @@ function chipAnio(id,st){
 function invAnio(p,anio){
   if(!p)return 0;
   return partidasPlan(p,anio).reduce(function(s,x){return s+(x.c==='si'?x.monto:0);},0);
+}
+/* Tipos de inversión que tiene un médico en el año (filtro Inversión).
+   Toda inversión cuenta: tácticas del plan, eventos compartidos y solicitudes. */
+function invTipos(k,anio){
+  var T={},p=PLANES[k];
+  var enA=function(a){return !!a&&(!anio||a===anio);};
+  if(p){
+    var pa=p.__anio||'',anual=!anio||!pa||pa===anio;
+    var pt=p.patrocinio;
+    if(pt&&pt.activo&&enA(anioTac('patrocinio',pt))){
+      T.pat=1;var e=eventoDe(pt);
+      if(e&&CONGRESOS.some(function(c){return c.evento_id===e.id;}))T.nac=1;
+    }
+    if(p.oneone&&p.oneone.activo&&ooSes(p.oneone).some(function(x){return x.fecha?enA(anioDe(x.fecha)):anual;}))T.oo=1;
+    if(p.mm&&p.mm.activo&&anual&&(num(p.mm.cant)||mmMensual(p.mm)))T.mm=1;
+    if(p.material&&p.material.activo&&anual&&(num(p.material.monto)||String(p.material.piezas||'').trim()))T.mat=1;
+    if((p.solicitudes||[]).some(function(x){return x.fecha?enA(anioDe(x.fecha)):anual;}))T.sol=1;
+  }
+  if(MESAS.some(function(m){return (m.invitados||[]).indexOf(k)!==-1&&enA(anioDe(m.fecha));}))T.mesa=1;
+  if(SUMMITS.some(function(s){return (s.invitados||[]).indexOf(k)!==-1&&enA(anioDe(s.fecha_ini));}))T.summit=1;
+  return T;
 }
 /* Actividades con fecha del médico en el año: patrocinio, 1:1, solicitudes, mesas y summits */
 function actsAnio(k,anio){
