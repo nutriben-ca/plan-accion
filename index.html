@@ -473,9 +473,14 @@ select:focus,input:focus,textarea:focus{border-color:var(--cielo)}
       <option>Lealtad fraccionada</option><option>Lealtad consolidada</option>
     </select>
   </label>
-  <label>Estado
+  <label>Plan
+    <select id="f-plan" onchange="renderList()">
+      <option value="">Todos</option><option value="con">Con plan</option><option value="sin">Sin plan</option>
+    </select>
+  </label>
+  <label>Actividad
     <select id="f-est" onchange="renderList()">
-      <option value="">Todos</option><option value="con">Con plan</option><option value="pat">Con patrocinio</option><option value="anio">Con actividad en el a&ntilde;o</option><option value="sin">Sin plan</option>
+      <option value="">Todos</option><option value="pat">Con patrocinio</option><option value="anio">Con actividad en el a&ntilde;o</option>
     </select>
   </label>
   <label>Datos
@@ -1053,16 +1058,18 @@ function msInit(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',msInit);else setTimeout(msInit,0);
 
 function filtrosActivos(){
-  var nom={'f-seg':'Segmento','f-tier':'Tier','f-pat':'Patrón','f-est':'Estado','f-dat':'Datos','f-tipo':'Tipo'},out=[];
+  var nom={'f-seg':'Segmento','f-tier':'Tier','f-pat':'Patrón','f-est':'Actividad','f-dat':'Datos','f-tipo':'Tipo'},out=[];
   MS_IDS.forEach(function(id){var e=$(id),v=msv(id);if(!e||!v.length)return;
     out.push([nom[id],v.map(function(x){var o=[].filter.call(e.options,function(z){return z.value===x;})[0];return o?o.text:x;}).join(', ')]);});
+  var pl=$('f-plan');if(pl&&pl.value)out.push(['Plan',pl.options[pl.selectedIndex].text]);
   var q=($('f-q')&&$('f-q').value||'').trim();if(q)out.push(['Búsqueda',q]);
   return out;
 }
 function filtrados(){
   var mr=$('f-mr').value,seg=msv('f-seg'),tier=msv('f-tier'),
       est=msv('f-est'),q=($('f-q').value||'').toLowerCase(),
-      dat=msv('f-dat'),tipo=msv('f-tipo'),pat=msv('f-pat');
+      dat=msv('f-dat'),tipo=msv('f-tipo'),pat=msv('f-pat'),
+      plan=$('f-plan')?$('f-plan').value:'';
   /* Dentro de cada selector las opciones se suman (A o B1 o B2); entre selectores se cruzan. */
   if(!mr)return [];
   return DATA.filter(function(d){
@@ -1074,6 +1081,8 @@ function filtrados(){
     if(tier.length&&tier.indexOf(d.tier)===-1)return false;
     if(pat.length&&(d.contacto||pat.indexOf(d.patron)===-1))return false; /* solo médicos: los profesionales no tienen patrón */
     if(q&&d.n.toLowerCase().indexOf(q)===-1&&String(d.ciudad||'').toLowerCase().indexOf(q)===-1&&String(d.contacto?d.contacto.institucion:'').toLowerCase().indexOf(q)===-1)return false;
+    if(plan==='con'&&!PLANES[key(d)])return false;
+    if(plan==='sin'&&PLANES[key(d)])return false;
     if(est.length){var tiene=!!PLANES[key(d)],pp=PLANES[key(d)];
       if(!est.some(function(x){
         if(x==='con')return tiene;
@@ -1768,6 +1777,7 @@ function irPlan(k){
   var d=byKey(k);if(!d){toast('Ese médico ya no está en la cartera');return;}
   vista('planes');$('f-mr').value=d.mr;
   ['f-seg','f-tier','f-pat','f-est','f-dat'].forEach(function(id){msSet(id,[]);});
+  if($('f-plan'))$('f-plan').value='';
   if($('f-q'))$('f-q').value='';
   pickMR();abrir(k);
 }
@@ -3133,9 +3143,9 @@ function pintaAnioPlanes(){
   var o=$('f-est')&&$('f-est').querySelector('option[value="anio"]');
   if(o)o.textContent='Con actividad en '+ANIO_PLAN;
   if(typeof msPinta==='function')msPinta('f-est');
-  var oc=$('f-est')&&$('f-est').querySelector('option[value="con"]');
+  var oc=$('f-plan')&&$('f-plan').querySelector('option[value="con"]');
   if(oc)oc.textContent='Con plan '+ANIO_PLAN;
-  var os=$('f-est')&&$('f-est').querySelector('option[value="sin"]');
+  var os=$('f-plan')&&$('f-plan').querySelector('option[value="sin"]');
   if(os)os.textContent='Sin plan '+ANIO_PLAN;
 }
 function cambiosSinGuardar(){
